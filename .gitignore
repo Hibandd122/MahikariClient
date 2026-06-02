@@ -1,0 +1,9 @@
+.gradle/
+build/
+run/
+.vscode/
+TestDump.txt
+ExpectedSignature.txt
+errors.txt
+bin/
+*.log

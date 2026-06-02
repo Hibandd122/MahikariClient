@@ -1,0 +1,21 @@
+{
+    "required": true,
+    "minVersion": "0.8",
+    "package": "dev.mahikari.client.mixin",
+    "compatibilityLevel": "JAVA_21",
+    "client": [
+        "GameRendererAccessor",
+        "FogRendererMixin",
+        "ChatHudMixin",
+        "InGameHudMixin",
+        "LightmapTextureManagerMixin",
+        "InGameOverlayRendererMixin",
+        "HeldItemRendererMixin",
+        "ArmorFeatureRendererMixin",
+        "ItemEntityRendererMixin",
+        "KeyBindingSprintMixin"
+    ],
+    "injectors": {
+        "defaultRequire": 1
+    }
+}

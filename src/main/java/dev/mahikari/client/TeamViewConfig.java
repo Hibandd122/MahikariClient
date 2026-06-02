@@ -1,0 +1,210 @@
+package dev.mahikari.client;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import net.fabricmc.loader.api.FabricLoader;
+
+public class TeamViewConfig {
+    private static TeamViewConfig INSTANCE;
+    private static final Gson GSON;
+    private static final Path PATH;
+
+    public boolean enabled = true;
+    public String viewMode = "ALL";
+    public String uiQuality = "MEDIUM"; // MEDIUM (Default), LOW (Performance)
+    public boolean clickGuiNoBackground = false;
+    public String skipUpdateForVersion = "";
+    public boolean onScreenEnabled = true;
+    public boolean offScreenEnabled = true;
+    public boolean offScreenNear = false;
+    public boolean showBiome = true;
+    public boolean showDistance = true;
+    public float nearRange = 64.0f;
+    public float scaleMultiplier = 1.0f;
+    public float offScreenScale = 0.5f;
+    public String arrowColor = "GREEN";
+    public boolean teamHudEnabled = true;
+    public int teamHudOffsetX = 8;
+    public int teamHudOffsetY = 8;
+    public float teamHudScale = 1.0f;
+    public int teamHudMaxCards = 3;
+    public boolean teamHudShowHpText = true;
+    public boolean teamHudShowEffects = true;
+    public boolean teamHudDeathAnim = true;
+    public String teamHudTheme = "SAO_CLASSIC";
+    public String teamHudFilter = "AUTO";
+
+    public int sprintingOffsetX = -1;
+    public int sprintingOffsetY = -1;
+    public boolean sprintingShowHud = true;
+    public boolean sprintingShowBackground = false;
+    public boolean sprintingShowBorder = true;
+    public String sprintingTextColor = "WHITE"; // WHITE, GREEN, RED, BLUE, YELLOW
+    public float sprintingScale = 1.0f;
+
+    public boolean effectHudEnabled = true;
+    public boolean effectHudShowBackground = true;
+    public boolean effectHudShowBorder = false;
+    public String effectHudLayout = "VERTICAL";
+    public int effectHudOffsetX = 10;
+    public int effectHudOffsetY = 100;
+    public float effectHudScale = 1.0f;
+
+    public boolean notificationsEnabled = true;
+    public boolean notifyLegendary = true;
+    public boolean notifyAirdrop = true;
+    public boolean notifyCraftable = true;
+    public boolean notificationSound = true;
+    public float notificationScale = 1.0f;
+    public float notificationDurationMul = 1.0f;
+    public int notificationOffsetX = 9999;
+    public int notificationOffsetY = 10;
+    public int notificationMaxStack = 5;
+    
+    public boolean notificationShowBackground = true;
+    public boolean notificationShowBorder = true;
+    public boolean notificationShowProgress = true;
+    public boolean notificationShowIconBox = true;
+    public boolean notificationShowShimmer = true;
+
+    public boolean visualsEnabled = true;
+    public boolean fullBright = true;
+    public float fullBrightLevel = 1.0f;
+
+    public boolean noFog = true;
+    public float noFogDensity = 0.0f;
+    public boolean clearFluids = true;
+    public boolean autoSprint = false;
+    public boolean sprintingAnimated = true;
+    public boolean infiniteChat = true;
+    public boolean smoothChat = true;
+    public float smoothChatSpeed = 1.0f;
+    public boolean effectHudShowAmplifier = true;
+    public String effectHudSortMode = "DURATION";
+
+    // Nametag Tweaks
+    public boolean nametagEnabled = true;
+    public boolean nametagNoBackground = false;
+    public String nametagBackgroundColor = "BLACK"; // BLACK, WHITE, RED, GREEN, BLUE, TRANSPARENT
+    public float nametagScale = 1.0f;
+    public boolean nametagShowTeammates = false; // by default teammates show via TeamView hologram
+    public boolean nametagShowSelf = false; // show own nametag in third person
+    public float nametagMaxDistance = 128.0f;
+
+    // Visual Tweaks
+    public boolean lowFire = false;
+    public float fireHeight = 0.5f;
+    public boolean lowShield = false;
+    public float shieldHeight = -0.2f;
+    public boolean lowTotem = false;
+    public float totemHeight = -0.2f;
+    public float totemScale = 0.8f;
+    public boolean smallItems = false;
+    public float itemScale = 0.8f;
+    public float itemOffsetX = 0.0f;
+    public float itemOffsetY = 0.0f;
+    public boolean hideArmor = false;
+    public String hideArmorMode = "ALL"; // ALL, SELF_ONLY, OTHERS_ONLY
+    public boolean itemPhysicsEnabled = false;
+    public String itemPhysicsMode = "PHYSICS"; // PHYSICS or 2D
+
+    public static TeamViewConfig get() {
+        if (INSTANCE == null) {
+            TeamViewConfig.load();
+        }
+        return INSTANCE;
+    }
+
+    public static void load() {
+        try {
+            if (Files.exists(PATH)) {
+                INSTANCE = (TeamViewConfig)GSON.fromJson(Files.readString(PATH), TeamViewConfig.class);
+            }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+        if (INSTANCE == null) {
+            INSTANCE = new TeamViewConfig();
+        }
+    }
+
+    public static void save() {
+        try {
+            Files.writeString(PATH, GSON.toJson(TeamViewConfig.get()));
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+    }
+
+    public int getArrowColorRGB() {
+        return switch (this.arrowColor.toUpperCase()) {
+            case "CYAN" -> 0x00CCCC;
+            case "YELLOW" -> 0xCCCC00;
+            case "RED" -> 0xCC3333;
+            case "BLUE" -> 0x3366FF;
+            case "ORANGE" -> 0xFF8800;
+            case "PINK" -> 0xFF66CC;
+            case "WHITE" -> 0xCCCCCC;
+            default -> 0x00CC00;
+        };
+    }
+
+    public int getArrowColorARGB() {
+        return 0xDD000000 | this.getArrowColorRGB();
+    }
+
+    public int getHighlightARGB() {
+        int rgb = this.getArrowColorRGB();
+        int r = Math.min(255, (rgb >> 16 & 0xFF) + 50);
+        int g = Math.min(255, (rgb >> 8 & 0xFF) + 50);
+        int b = Math.min(255, (rgb & 0xFF) + 50);
+        return 0xDD000000 | r << 16 | g << 8 | b;
+    }
+
+    public int getShadowARGB() {
+        int rgb = this.getArrowColorRGB();
+        return 0x80000000 | ((rgb >> 16 & 0xFF) / 3) << 16 | ((rgb >> 8 & 0xFF) / 3) << 8 | (rgb & 0xFF) / 3;
+    }
+
+    public int getTextARGB() {
+        int rgb = this.getArrowColorRGB();
+        int r = Math.min(255, (rgb >> 16 & 0xFF) + 80);
+        int g = Math.min(255, (rgb >> 8 & 0xFF) + 80);
+        int b = Math.min(255, (rgb & 0xFF) + 80);
+        return 0xFF000000 | r << 16 | g << 8 | b;
+    }
+
+    public int getSprintingColorARGB() {
+        return switch (this.sprintingTextColor.toUpperCase()) {
+            case "GREEN" -> 0xFF55FF55;
+            case "RED" -> 0xFFFF5555;
+            case "BLUE" -> 0xFF5555FF;
+            case "YELLOW" -> 0xFFFFFF55;
+            case "GOLD" -> 0xFFFFAA00;
+            case "AQUA" -> 0xFF55FFFF;
+            case "PINK" -> 0xFFFF55FF;
+            default -> 0xFFFFFFFF; // WHITE
+        };
+    }
+
+    public int getNametagBackgroundColorARGB() {
+        return switch (this.nametagBackgroundColor.toUpperCase()) {
+            case "BLACK" -> 0xA0000000;
+            case "WHITE" -> 0xA0FFFFFF;
+            case "RED" -> 0xA0AA0000;
+            case "GREEN" -> 0xA000AA00;
+            case "BLUE" -> 0xA00000AA;
+            case "TRANSPARENT" -> 0x00000000;
+            default -> 0xA0000000; // Default black, visibly opaque
+        };
+    }
+
+    static {
+        GSON = new GsonBuilder().setPrettyPrinting().create();
+        PATH = FabricLoader.getInstance().getConfigDir().resolve("mahikari-client.json");
+    }
+}

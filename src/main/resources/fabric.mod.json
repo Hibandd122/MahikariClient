@@ -1,0 +1,32 @@
+{
+    "schemaVersion": 1,
+    "id": "mahikari-client",
+    "version": "3.0.0",
+    "name": "MahikariClient",
+    "description": "A premium, minimalist client mod featuring smooth health animations, modern glassmorphism UI, and rounded in-world holograms.",
+    "authors": ["Mahikari"],
+    "contact": {},
+    "license": "All Rights Reserved",
+    "environment": "client",
+    "entrypoints": {
+        "client": [
+            "dev.mahikari.client.MahikariClient",
+            "mahikariui.fabric.MahikariUIFabric"
+        ],
+        "modmenu": ["dev.mahikari.client.ModMenuIntegration"]
+    },
+    "mixins": [
+        "mahikari-client.mixins.json",
+        "mahikariui.mixins.json"
+    ],
+    "depends": {
+        "fabricloader": ">=0.16.0",
+        "minecraft": "*",
+        "java": ">=21",
+        "fabric-api": "*"
+    },
+    "suggests": {
+        "modmenu": "*"
+    },
+    "icon": "assets/mahikari-client/icon.png"
+}
