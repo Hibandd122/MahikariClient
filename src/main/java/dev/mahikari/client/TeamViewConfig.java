@@ -37,6 +37,10 @@ public class TeamViewConfig {
     public String teamHudTheme = "SAO_CLASSIC";
     public String teamHudFilter = "AUTO";
 
+    public boolean espEnabled = true;
+    public boolean espBoxes = true;
+    public boolean espTracers = true;
+
     public int sprintingOffsetX = -1;
     public int sprintingOffsetY = -1;
     public boolean sprintingShowHud = true;
