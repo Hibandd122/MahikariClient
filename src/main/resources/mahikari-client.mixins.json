@@ -12,9 +12,10 @@
         "LightmapTextureManagerMixin",
         "InGameOverlayRendererMixin",
         "HeldItemRendererMixin",
-        "ArmorFeatureRendererMixin",
         "ItemEntityRendererMixin",
-        "KeyBindingSprintMixin"
+        "KeyBindingSprintMixin",
+        "ParticleManagerMixin",
+        "WorldMixin"
     ],
     "injectors": {
         "defaultRequire": 1

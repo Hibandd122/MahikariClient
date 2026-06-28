@@ -40,6 +40,11 @@ public class TeamViewConfig {
     public boolean espEnabled = true;
     public boolean espBoxes = true;
     public boolean espTracers = true;
+    public boolean espCornerBoxes = false;
+    public boolean espHealthBar = true;
+    public boolean espNames = true;
+    public boolean espDistance = true;
+    public boolean espThroughWalls = true;
 
     public int sprintingOffsetX = -1;
     public int sprintingOffsetY = -1;
@@ -130,10 +135,13 @@ public class TeamViewConfig {
     public float itemScale = 0.8f;
     public float itemOffsetX = 0.0f;
     public float itemOffsetY = 0.0f;
-    public boolean hideArmor = false;
-    public String hideArmorMode = "ALL"; // ALL, SELF_ONLY, OTHERS_ONLY
     public boolean itemPhysicsEnabled = false;
     public String itemPhysicsMode = "PHYSICS"; // PHYSICS or 2D
+
+    // Optimization Tweaks
+    public boolean optNoParticles = false;
+    public boolean optNoWeather = false;
+    public boolean optNoHurtCam = false;
 
     public static TeamViewConfig get() {
         if (INSTANCE == null) {

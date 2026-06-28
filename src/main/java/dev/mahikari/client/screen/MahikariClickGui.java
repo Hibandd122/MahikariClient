@@ -43,12 +43,11 @@ public class MahikariClickGui extends Screen {
     private static final int TAB_SPRINT = 5;
     private static final int TAB_CHAT = 6;
     private static final int TAB_VISUALS = 7;
-    private static final int TAB_HIDE_ARMOR = 8;
-    private static final int TAB_LOW_FIRE = 9;
-    private static final int TAB_LOW_SHIELD = 10;
-    private static final int TAB_LOW_TOTEM = 11;
-    private static final int TAB_SMALL_ITEMS = 12;
-    private static final int TAB_PERFORMANCE = 13;
+    private static final int TAB_LOW_FIRE = 8;
+    private static final int TAB_LOW_SHIELD = 9;
+    private static final int TAB_LOW_TOTEM = 10;
+    private static final int TAB_SMALL_ITEMS = 11;
+    private static final int TAB_PERFORMANCE = 12;
 
     private static final int ACCENT = 0xFF00D9FF;
     private static final int ACCENT_DARK = 0xFF0099CC;
@@ -189,7 +188,7 @@ public class MahikariClickGui extends Screen {
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Auto Sprint", "Sprint Toggle", net.minecraft.item.Items.FEATHER.getDefaultStack(), () -> openSettings(TAB_SPRINT), () -> cfg.autoSprint, v -> cfg.autoSprint = v));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Chat Utils", "Enhanced Chat", net.minecraft.item.Items.PAPER.getDefaultStack(), () -> openSettings(TAB_CHAT)));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Visuals", "Brightness & Fog", net.minecraft.item.Items.ENDER_EYE.getDefaultStack(), () -> openSettings(TAB_VISUALS), () -> cfg.visualsEnabled, v -> cfg.visualsEnabled = v));
-        cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Hide Armor", "Invisible Armor", net.minecraft.item.Items.IRON_CHESTPLATE.getDefaultStack(), () -> openSettings(TAB_HIDE_ARMOR), () -> cfg.hideArmor, v -> cfg.hideArmor = v));
+
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Low Fire", "Reduce Fire Overlay", net.minecraft.item.Items.FLINT_AND_STEEL.getDefaultStack(), () -> openSettings(TAB_LOW_FIRE), () -> cfg.lowFire, v -> cfg.lowFire = v));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Low Shield", "Lower Shield View", net.minecraft.item.Items.SHIELD.getDefaultStack(), () -> openSettings(TAB_LOW_SHIELD), () -> cfg.lowShield, v -> cfg.lowShield = v));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Low Totem", "Lower Totem View", net.minecraft.item.Items.TOTEM_OF_UNDYING.getDefaultStack(), () -> openSettings(TAB_LOW_TOTEM), () -> cfg.lowTotem, v -> cfg.lowTotem = v));
@@ -264,7 +263,12 @@ public class MahikariClickGui extends Screen {
         addBool(TAB_ARROWS, "Enable ESP (Wallhack)", () -> cfg.espEnabled, v -> cfg.espEnabled = v, def.espEnabled);
         Supplier<Boolean> espCond = () -> cfg.espEnabled;
         addBool(TAB_ARROWS, "Show ESP Boxes", () -> cfg.espBoxes, v -> cfg.espBoxes = v, def.espBoxes).setCondition(espCond).indent();
+        addBool(TAB_ARROWS, "Corner ESP Boxes", () -> cfg.espCornerBoxes, v -> cfg.espCornerBoxes = v, def.espCornerBoxes).setCondition(espCond).indent();
         addBool(TAB_ARROWS, "Show ESP Tracers", () -> cfg.espTracers, v -> cfg.espTracers = v, def.espTracers).setCondition(espCond).indent();
+        addBool(TAB_ARROWS, "Show ESP Health Bar", () -> cfg.espHealthBar, v -> cfg.espHealthBar = v, def.espHealthBar).setCondition(espCond).indent();
+        addBool(TAB_ARROWS, "Show ESP Names", () -> cfg.espNames, v -> cfg.espNames = v, def.espNames).setCondition(espCond).indent();
+        addBool(TAB_ARROWS, "Show ESP Distance", () -> cfg.espDistance, v -> cfg.espDistance = v, def.espDistance).setCondition(espCond).indent();
+        addBool(TAB_ARROWS, "Show ESP Through Walls", () -> cfg.espThroughWalls, v -> cfg.espThroughWalls = v, def.espThroughWalls).setCondition(espCond).indent();
 
         Supplier<Boolean> anyArrow = () -> cfg.onScreenEnabled || cfg.offScreenEnabled || cfg.espEnabled;
         Supplier<Boolean> offArrow = () -> cfg.offScreenEnabled;
@@ -309,8 +313,11 @@ public class MahikariClickGui extends Screen {
                     configClass.getMethod("setLowQualityMode", boolean.class).invoke(instance, "LOW".equals(v));
                 } catch (Exception e) {}
             }
-        }, def.uiQuality, new String[]{"MEDIUM", "LOW"}, this::filterLabel);
+                }, def.uiQuality, new String[]{"MEDIUM", "LOW"}, this::filterLabel);
         addBool(TAB_PERFORMANCE, "No Background (ClickGui)", () -> cfg.clickGuiNoBackground, v -> cfg.clickGuiNoBackground = v, def.clickGuiNoBackground);
+        addBool(TAB_PERFORMANCE, "Tắt hiệu ứng hạt (No Particles)", () -> cfg.optNoParticles, v -> cfg.optNoParticles = v, def.optNoParticles);
+        addBool(TAB_PERFORMANCE, "Tắt thời tiết (No Weather)", () -> cfg.optNoWeather, v -> cfg.optNoWeather = v, def.optNoWeather);
+        addBool(TAB_PERFORMANCE, "Tắt rung màn hình (No Hurt Cam)", () -> cfg.optNoHurtCam, v -> cfg.optNoHurtCam = v, def.optNoHurtCam);
 
         // VISUALS TAB
         addBool(TAB_VISUALS, "Enable Visuals Module", () -> cfg.visualsEnabled, v -> cfg.visualsEnabled = v, def.visualsEnabled);
@@ -326,11 +333,6 @@ public class MahikariClickGui extends Screen {
 
         addBool(TAB_VISUALS, "Clear Water / Lava (Nhin xuyen chat long)", () -> cfg.clearFluids, v -> cfg.clearFluids = v, def.clearFluids).setCondition(visualsEnabled);
 
-        // HIDE ARMOR TAB
-        addBool(TAB_HIDE_ARMOR, "Hide Player Armor", () -> cfg.hideArmor, v -> cfg.hideArmor = v, def.hideArmor);
-        Supplier<Boolean> hideArmorEnabled = () -> cfg.hideArmor;
-        addCycle(TAB_HIDE_ARMOR, "Apply to", () -> cfg.hideArmorMode, v -> cfg.hideArmorMode = v, def.hideArmorMode,
-            new String[]{"ALL", "SELF_ONLY", "OTHERS_ONLY"}, this::filterLabel).setCondition(hideArmorEnabled).indent();
 
         // LOW FIRE TAB
         addBool(TAB_LOW_FIRE, "Low Fire (Giam lua che mat)", () -> cfg.lowFire, v -> cfg.lowFire = v, def.lowFire);
@@ -902,7 +904,7 @@ public class MahikariClickGui extends Screen {
                            activeTab == TAB_SPRINT ? "Auto Sprint" :
                            activeTab == TAB_CHAT ? "Chat" :
                            activeTab == TAB_VISUALS ? "Visuals" :
-                           activeTab == TAB_HIDE_ARMOR ? "Hide Armor" :
+
                            activeTab == TAB_LOW_FIRE ? "Low Fire" :
                            activeTab == TAB_LOW_SHIELD ? "Low Shield" :
                            activeTab == TAB_LOW_TOTEM ? "Low Totem" :

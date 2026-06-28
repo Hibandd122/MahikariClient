@@ -2,7 +2,6 @@ package dev.mahikari.client.mixin;
 
 import dev.mahikari.client.TeamViewConfig;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.item.HeldItemRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;

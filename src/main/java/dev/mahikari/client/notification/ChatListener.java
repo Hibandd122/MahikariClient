@@ -46,119 +46,127 @@ public class ChatListener {
     public static void register() {
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             if (overlay) return;
-            TeamViewConfig cfg = TeamViewConfig.get();
-            if (!cfg.enabled) return;
+            onMessageReceived(message.getString());
+        });
+        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, instant) -> {
+            onMessageReceived(message.getString());
+        });
+    }
 
-            String plainText = message.getString().trim();
-            long now = System.currentTimeMillis();
+    private static void onMessageReceived(String rawMessage) {
+        if (rawMessage == null) return;
+        TeamViewConfig cfg = TeamViewConfig.get();
+        if (!cfg.enabled) return;
 
-            // 1. Legendary Item Crafting Alert
-            if (cfg.notifyLegendary) {
-                Matcher m = LEGENDARY_CRAFT_PATTERN.matcher(plainText);
-                if (m.find()) {
-                    String player = m.group(1);
-                    String item = m.group(2).trim();
-                    NotificationManager.addNotification(
-                            "CHẾ TẠO HUYỀN THOẠI",
-                            player + " vừa chế tạo " + item,
-                            0xFFD24A,
-                            6000
-                    );
-                    return;
-                }
-                Matcher mHoplite = HOPLITE_CRAFT_PATTERN.matcher(plainText);
-                if (mHoplite.find()) {
-                    String player = mHoplite.group(1);
-                    String item = mHoplite.group(2).trim();
-                    NotificationManager.addNotification(
-                            "CHẾ TẠO TRANG BỊ",
-                            (player.equalsIgnoreCase("You") ? "Bạn" : player) + " chế tạo " + item,
-                            0xFFD24A,
-                            4000
-                    );
-                    return;
-                }
+        String plainText = rawMessage.trim();
+        long now = System.currentTimeMillis();
+
+        // 1. Legendary Item Crafting Alert
+        if (cfg.notifyLegendary) {
+            Matcher m = LEGENDARY_CRAFT_PATTERN.matcher(plainText);
+            if (m.find()) {
+                String player = m.group(1);
+                String item = m.group(2).trim();
+                NotificationManager.addNotification(
+                        "CHẾ TẠO HUYỀN THOẠI",
+                        player + " vừa chế tạo " + item,
+                        0xFFD24A,
+                        6000
+                );
+                return;
+            }
+            Matcher mHoplite = HOPLITE_CRAFT_PATTERN.matcher(plainText);
+            if (mHoplite.find()) {
+                String player = mHoplite.group(1);
+                String item = mHoplite.group(2).trim();
+                NotificationManager.addNotification(
+                        "CHẾ TẠO TRANG BỊ",
+                        (player.equalsIgnoreCase("You") ? "Bạn" : player) + " chế tạo " + item,
+                        0xFFD24A,
+                        4000
+                );
+                return;
+            }
+        }
+
+        // 2. Airdrop Coordinates
+        if (cfg.notifyAirdrop) {
+            Matcher m = AIRDROP_PATTERN.matcher(plainText);
+            if (m.find()) {
+                String x = m.group(1);
+                String y = m.group(2);
+                String z = m.group(3);
+                NotificationManager.addNotification(
+                        AIRDROP_NOTIF_TITLE,
+                        "Tọa độ: X:" + x + " Y:" + y + " Z:" + z,
+                        0xFF6B6B,
+                        8000
+                );
+                return;
+            }
+            
+            Matcher mHoplite = HOPLITE_AIRDROP_PATTERN.matcher(plainText);
+            if (mHoplite.find()) {
+                String x = mHoplite.group(1);
+                String z = mHoplite.group(2);
+                NotificationManager.addNotification(
+                        AIRDROP_NOTIF_TITLE,
+                        "Tọa độ: X:" + x + " Z:" + z,
+                        0xFF6B6B,
+                        8000
+                );
+                return;
             }
 
-            // 2. Airdrop Coordinates
-            if (cfg.notifyAirdrop) {
-                Matcher m = AIRDROP_PATTERN.matcher(plainText);
-                if (m.find()) {
-                    String x = m.group(1);
-                    String y = m.group(2);
-                    String z = m.group(3);
-                    NotificationManager.addNotification(
-                            AIRDROP_NOTIF_TITLE,
-                            "Tọa độ: X:" + x + " Y:" + y + " Z:" + z,
-                            0xFF6B6B,
-                            8000
-                    );
-                    return;
-                }
-                
-                Matcher mHoplite = HOPLITE_AIRDROP_PATTERN.matcher(plainText);
-                if (mHoplite.find()) {
-                    String x = mHoplite.group(1);
-                    String z = mHoplite.group(2);
-                    NotificationManager.addNotification(
-                            AIRDROP_NOTIF_TITLE,
-                            "Tọa độ: X:" + x + " Z:" + z,
-                            0xFF6B6B,
-                            8000
-                    );
-                    return;
-                }
+            Matcher m2 = AIRDROP_FALLEN_PATTERN.matcher(plainText);
+            if (m2.find()) {
+                NotificationManager.addNotification(
+                        AIRDROP_FALLEN_NOTIF_TITLE,
+                        "Mau đi loot ngay!",
+                        0xFF4A4A,
+                        5000
+                );
+                return;
+            }
+        }
 
-                Matcher m2 = AIRDROP_FALLEN_PATTERN.matcher(plainText);
-                if (m2.find()) {
-                    NotificationManager.addNotification(
-                            AIRDROP_FALLEN_NOTIF_TITLE,
-                            "Mau đi loot ngay!",
-                            0xFF4A4A,
-                            5000
-                    );
-                    return;
-                }
+        // 3. Craftable Alert
+        if (cfg.notifyCraftable) {
+            // Check single-line first
+            Matcher m = CRAFTABLE_SINGLE_PATTERN.matcher(plainText);
+            if (m.find()) {
+                String item = m.group(1).trim();
+                NotificationManager.addNotification(
+                        "SẴN SÀNG CHẾ TẠO",
+                        "Bạn đã đủ đồ chế tạo " + item,
+                        0x7BA8FF,
+                        4000
+                );
+                return;
             }
 
-            // 3. Craftable Alert
-            if (cfg.notifyCraftable) {
-                // Check single-line first
-                Matcher m = CRAFTABLE_SINGLE_PATTERN.matcher(plainText);
-                if (m.find()) {
-                    String item = m.group(1).trim();
-                    NotificationManager.addNotification(
-                            "SẴN SÀNG CHẾ TẠO",
-                            "Bạn đã đủ đồ chế tạo " + item,
-                            0x7BA8FF,
-                            4000
-                    );
-                    return;
-                }
-
-                // Check multiline
-                if (CRAFTABLE_L1_PATTERN.matcher(plainText).matches()) {
-                    lastLine = plainText;
-                    lastLineTime = now;
-                } else if (now - lastLineTime < 1000) {
-                    Matcher mL2 = CRAFTABLE_L2_PATTERN.matcher(plainText);
-                    if (mL2.find()) {
-                        String item = mL2.group(1).trim();
-                        // Ignore action prompt lines
-                        if (!item.toLowerCase().contains("nhấn vào đây") && !item.toLowerCase().contains("click here")) {
-                            NotificationManager.addNotification(
-                                    "SẴN SÀNG CHẾ TẠO",
-                                    "Bạn đã đủ đồ chế tạo " + item,
-                                    0x7BA8FF,
-                                    4000
-                            );
-                            lastLine = ""; // consume
-                            lastLineTime = 0L;
-                            return;
-                        }
+            // Check multiline
+            if (CRAFTABLE_L1_PATTERN.matcher(plainText).matches()) {
+                lastLine = plainText;
+                lastLineTime = now;
+            } else if (now - lastLineTime < 1000) {
+                Matcher mL2 = CRAFTABLE_L2_PATTERN.matcher(plainText);
+                if (mL2.find()) {
+                    String item = mL2.group(1).trim();
+                    // Ignore action prompt lines
+                    if (!item.toLowerCase().contains("nhấn vào đây") && !item.toLowerCase().contains("click here")) {
+                        NotificationManager.addNotification(
+                                "SẴN SÀNG CHẾ TẠO",
+                                "Bạn đã đủ đồ chế tạo " + item,
+                                0x7BA8FF,
+                                4000
+                        );
+                        lastLine = ""; // consume
+                        lastLineTime = 0L;
+                        return;
                     }
                 }
             }
-        });
+        }
     }
 }
