@@ -86,7 +86,13 @@ public class HudEditorScreen extends Screen {
         this.teamHudElement.height = 70;
 
         this.notificationElement = new DraggableElement("Notifications") {
-            @Override int getX() { return cfg.notificationOffsetX; }
+            @Override int getX() { 
+                int ww = (int) (this.width * getScale());
+                if (cfg.notificationOffsetX == 9999 || cfg.notificationOffsetX < 0) {
+                    return HudEditorScreen.this.width - ww - 10;
+                }
+                return Math.max(0, Math.min(HudEditorScreen.this.width - ww, cfg.notificationOffsetX));
+            }
             @Override void setX(int x) { cfg.notificationOffsetX = x; }
             @Override int getY() { return cfg.notificationOffsetY; }
             @Override void setY(int y) { cfg.notificationOffsetY = y; }
@@ -446,8 +452,8 @@ public class HudEditorScreen extends Screen {
         TeamViewConfig cfg = TeamViewConfig.get();
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        int nx = cfg.notificationOffsetX;
-        int ny = cfg.notificationOffsetY;
+        int nx = notificationElement.getX();
+        int ny = notificationElement.getY();
         int baseW = totalNotifyW();
         int baseH = totalNotifyH();
         int scaledNW = (int) (baseW * cfg.notificationScale);

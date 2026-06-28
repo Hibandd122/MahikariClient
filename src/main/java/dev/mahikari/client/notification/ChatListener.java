@@ -13,7 +13,7 @@ public class ChatListener {
     // Vd: 󰀈 󰍧Khanhthanh19030 đã chế tạo Goldreaper! Không ai có thể...
     // Server prefixes with icon (󰀈) + team icon (󰍧/󰍰/󰍣/󰍩/󰍥) before player name
     private static final Pattern LEGENDARY_CRAFT_PATTERN = Pattern
-            .compile("(?:\\S+\\s+)?\\S(\\w+)\\s+đã chế tạo\\s+(.+?)(?:!|huyền thoại)");
+            .compile("(\\w+)\\s+đã chế tạo\\s+(.+?)(?:!|huyền thoại|$)");
 
     // Vd: Đã có tín hiệu thính rơi... tọa độ x110, y83, z-39
     private static final Pattern AIRDROP_PATTERN = Pattern
@@ -25,11 +25,23 @@ public class ChatListener {
 
     // Vd: Bạn có đủ nguyên liệu để chế tạo Lumberjack's Axe
     // Also matches: "to craft a Smelter's Pickaxe" (English Hoplite)
-    private static final Pattern CRAFTABLE_PATTERN = Pattern.compile("(?i)^(?!.*nhấn vào đây|.*click here).*(?:đủ nguyên liệu để chế tạo |to craft an? )(.*)$");
+    private static final Pattern CRAFTABLE_SINGLE_PATTERN = Pattern
+            .compile("(?i)^(?!.*nhấn vào đây|.*click here).*(?:đủ nguyên liệu để chế tạo |to craft an? )(.*)$");
+
+    private static final Pattern CRAFTABLE_L1_PATTERN = Pattern
+            .compile("(?i).*(?:đủ nguyên liệu|enough materials).*");
+
+    private static final Pattern CRAFTABLE_L2_PATTERN = Pattern
+            .compile("(?i)^(?:để chế tạo|to craft)\\s+(.+)$");
 
     // English Hoplite Patterns
-    private static final Pattern HOPLITE_CRAFT_PATTERN = Pattern.compile("(?i)(You|\\S+) (?:have|has) crafted (?:the )?(.*?)!");
-    private static final Pattern HOPLITE_AIRDROP_PATTERN = Pattern.compile("(?i)supply drop is spawning.*?X=(-?\\d+).*?Z=(-?\\d+)");
+    private static final Pattern HOPLITE_CRAFT_PATTERN = Pattern
+            .compile("(?i)(\\w+)\\s+(?:have|has)\\s+crafted\\s+(?:the\\s+)?(.+?)(?:!|$)");
+    private static final Pattern HOPLITE_AIRDROP_PATTERN = Pattern
+            .compile("(?i)supply drop is spawning.*?X=(-?\\d+).*?Z=(-?\\d+)");
+
+    private static String lastLine = "";
+    private static long lastLineTime = 0L;
 
     public static void register() {
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
@@ -38,6 +50,7 @@ public class ChatListener {
             if (!cfg.enabled) return;
 
             String plainText = message.getString().trim();
+            long now = System.currentTimeMillis();
 
             // 1. Legendary Item Crafting Alert
             if (cfg.notifyLegendary) {
@@ -110,7 +123,8 @@ public class ChatListener {
 
             // 3. Craftable Alert
             if (cfg.notifyCraftable) {
-                Matcher m = CRAFTABLE_PATTERN.matcher(plainText);
+                // Check single-line first
+                Matcher m = CRAFTABLE_SINGLE_PATTERN.matcher(plainText);
                 if (m.find()) {
                     String item = m.group(1).trim();
                     NotificationManager.addNotification(
@@ -120,6 +134,29 @@ public class ChatListener {
                             4000
                     );
                     return;
+                }
+
+                // Check multiline
+                if (CRAFTABLE_L1_PATTERN.matcher(plainText).matches()) {
+                    lastLine = plainText;
+                    lastLineTime = now;
+                } else if (now - lastLineTime < 1000) {
+                    Matcher mL2 = CRAFTABLE_L2_PATTERN.matcher(plainText);
+                    if (mL2.find()) {
+                        String item = mL2.group(1).trim();
+                        // Ignore action prompt lines
+                        if (!item.toLowerCase().contains("nhấn vào đây") && !item.toLowerCase().contains("click here")) {
+                            NotificationManager.addNotification(
+                                    "SẴN SÀNG CHẾ TẠO",
+                                    "Bạn đã đủ đồ chế tạo " + item,
+                                    0x7BA8FF,
+                                    4000
+                            );
+                            lastLine = ""; // consume
+                            lastLineTime = 0L;
+                            return;
+                        }
+                    }
                 }
             }
         });

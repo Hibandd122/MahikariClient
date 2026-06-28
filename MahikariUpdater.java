@@ -5,11 +5,13 @@ import javax.swing.*;
 import java.util.*;
 import java.util.regex.*;
 import java.awt.GridLayout;
+import java.nio.charset.StandardCharsets;
 
 public class MahikariUpdater {
     private static final String GITHUB_REPO = "Hibandd122/MahikariClient";
     private static final String API_URL = "https://api.github.com/repos/" + GITHUB_REPO + "/releases";
     private static final String FILE_NAME = "mahikari-client.jar";
+    private static final String CONFIG_FILE = "updater-config.properties";
 
     static class Release {
         String name;
@@ -33,30 +35,30 @@ public class MahikariUpdater {
             // Fetch releases
             List<Release> releases = fetchReleases();
             if (releases.isEmpty()) {
-                JOptionPane.showMessageDialog(null, "No releases found for " + GITHUB_REPO, "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(null, "Không tìm thấy phiên bản nào cho " + GITHUB_REPO, "Lỗi", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
-            File modsDir = getModsDirectory();
+            File modsDir = getSavedModsDirectory();
             if (!modsDir.exists()) {
                 modsDir.mkdirs();
             }
 
             while (true) {
                 JPanel panel = new JPanel(new GridLayout(3, 1, 5, 5));
-                panel.add(new JLabel("Select version to install:"));
+                panel.add(new JLabel("Chọn phiên bản để cài đặt:"));
                 
                 JComboBox<Release> versionBox = new JComboBox<>(releases.toArray(new Release[0]));
                 panel.add(versionBox);
                 
-                JLabel pathLabel = new JLabel("Target: " + modsDir.getAbsolutePath());
+                JLabel pathLabel = new JLabel("Thư mục đích: " + modsDir.getAbsolutePath());
                 pathLabel.setFont(pathLabel.getFont().deriveFont(11f));
                 panel.add(pathLabel);
 
-                Object[] options = {"Install", "Change Folder", "Cancel"};
+                Object[] options = {"Cài đặt", "Đổi thư mục", "Hủy bỏ"};
                 int response = JOptionPane.showOptionDialog(null,
                     panel,
-                    "Mahikari Updater",
+                    "Trình cập nhật Mahikari Client",
                     JOptionPane.YES_NO_CANCEL_OPTION,
                     JOptionPane.PLAIN_MESSAGE,
                     null,
@@ -70,12 +72,13 @@ public class MahikariUpdater {
                 if (response == 1) { // Change Folder
                     JFileChooser chooser = new JFileChooser();
                     chooser.setCurrentDirectory(modsDir.getParentFile() != null ? modsDir.getParentFile() : modsDir);
-                    chooser.setDialogTitle("Select Installation Folder");
+                    chooser.setDialogTitle("Chọn thư mục cài đặt mod (.minecraft/mods)");
                     chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
                     chooser.setAcceptAllFileFilterUsed(false);
                     
                     if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
                         modsDir = chooser.getSelectedFile();
+                        saveModsDirectory(modsDir);
                     }
                     continue; // Re-open dialog with new path
                 }
@@ -85,12 +88,12 @@ public class MahikariUpdater {
                 if (selected != null) {
                     File targetFile = new File(modsDir, FILE_NAME);
                     downloadFile(selected.downloadUrl, targetFile);
-                    JOptionPane.showMessageDialog(null, "Installed " + selected.name + " successfully to:\n" + targetFile.getAbsolutePath(), "Success", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(null, "Đã cài đặt thành công " + selected.name + " tại:\n" + targetFile.getAbsolutePath(), "Thành công", JOptionPane.INFORMATION_MESSAGE);
                 }
                 break;
             }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(null, "Update failed: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(null, "Cập nhật thất bại: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }
     }
@@ -103,11 +106,11 @@ public class MahikariUpdater {
         conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
         
         if (conn.getResponseCode() != 200) {
-            throw new Exception("GitHub API returned " + conn.getResponseCode());
+            throw new Exception("GitHub API trả về mã lỗi HTTP " + conn.getResponseCode());
         }
         
         StringBuilder response = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 response.append(line);
@@ -116,26 +119,24 @@ public class MahikariUpdater {
         
         String json = response.toString();
         
-        // Simple regex parser for JSON to avoid dependencies
-        Matcher nameMatcher = Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
-        Matcher urlMatcher = Pattern.compile("\"browser_download_url\"\\s*:\\s*\"([^\"]+\\.jar)\"").matcher(json);
-        
-        while (nameMatcher.find() && urlMatcher.find()) {
-            String name = nameMatcher.group(1);
-            String downloadUrl = urlMatcher.group(1);
-            if (releases.isEmpty()) {
-                name += " (Latest)";
-            }
-            releases.add(new Release(name, downloadUrl));
-        }
-        
-        // Fallback if no specific jar found (can happen if release has no assets)
-        if (releases.isEmpty()) {
-            nameMatcher.reset();
-            while (nameMatcher.find()) {
+        // Split by release block: in GitHub API, each release starts with a distinct pattern like {"url": or "id":
+        String[] blocks = json.split("\\{\\s*\"url\"\\s*:");
+        for (String block : blocks) {
+            if (block.trim().isEmpty()) continue;
+            Matcher nameMatcher = Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"").matcher(block);
+            if (nameMatcher.find()) {
                 String name = nameMatcher.group(1);
-                String fallbackUrl = "https://github.com/" + GITHUB_REPO + "/releases/download/" + name + "/mahikari-client.jar";
-                releases.add(new Release(name, fallbackUrl));
+                Matcher urlMatcher = Pattern.compile("\"browser_download_url\"\\s*:\\s*\"([^\"]+\\.jar)\"").matcher(block);
+                String downloadUrl = null;
+                if (urlMatcher.find()) {
+                    downloadUrl = urlMatcher.group(1);
+                } else {
+                    downloadUrl = "https://github.com/" + GITHUB_REPO + "/releases/download/" + name + "/mahikari-client.jar";
+                }
+                if (releases.isEmpty()) {
+                    name += " (Mới nhất)";
+                }
+                releases.add(new Release(name, downloadUrl));
             }
         }
         
@@ -155,7 +156,7 @@ public class MahikariUpdater {
         }
         
         if (conn.getResponseCode() != 200) {
-            throw new IOException("Failed to download file: HTTP " + conn.getResponseCode());
+            throw new IOException("Tải file thất bại: HTTP " + conn.getResponseCode());
         }
         
         try (InputStream in = conn.getInputStream();
@@ -183,5 +184,36 @@ public class MahikariUpdater {
         }
 
         return new File(mcDir, "mods");
+    }
+
+    private static File getSavedModsDirectory() {
+        File defaultDir = getModsDirectory();
+        Properties props = new Properties();
+        File configFile = new File(CONFIG_FILE);
+        if (configFile.exists()) {
+            try (InputStream in = new FileInputStream(configFile)) {
+                props.load(in);
+                String savedPath = props.getProperty("modsFolder");
+                if (savedPath != null && !savedPath.trim().isEmpty()) {
+                    File savedDir = new File(savedPath);
+                    if (savedDir.exists() || savedDir.mkdirs()) {
+                        return savedDir;
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+        return defaultDir;
+    }
+
+    private static void saveModsDirectory(File modsDir) {
+        Properties props = new Properties();
+        props.setProperty("modsFolder", modsDir.getAbsolutePath());
+        try (OutputStream out = new FileOutputStream(CONFIG_FILE)) {
+            props.store(out, "Mahikari Updater Configuration");
+        } catch (Exception e) {
+            // Ignore
+        }
     }
 }

@@ -260,8 +260,13 @@ public class MahikariClickGui extends Screen {
         // ARROWS TAB
         addBool(TAB_ARROWS, "On-screen arrows", () -> cfg.onScreenEnabled, v -> cfg.onScreenEnabled = v, def.onScreenEnabled);
         addBool(TAB_ARROWS, "Off-screen arrows", () -> cfg.offScreenEnabled, v -> cfg.offScreenEnabled = v, def.offScreenEnabled);
+        
+        addBool(TAB_ARROWS, "Enable ESP (Wallhack)", () -> cfg.espEnabled, v -> cfg.espEnabled = v, def.espEnabled);
+        Supplier<Boolean> espCond = () -> cfg.espEnabled;
+        addBool(TAB_ARROWS, "Show ESP Boxes", () -> cfg.espBoxes, v -> cfg.espBoxes = v, def.espBoxes).setCondition(espCond).indent();
+        addBool(TAB_ARROWS, "Show ESP Tracers", () -> cfg.espTracers, v -> cfg.espTracers = v, def.espTracers).setCondition(espCond).indent();
 
-        Supplier<Boolean> anyArrow = () -> cfg.onScreenEnabled || cfg.offScreenEnabled;
+        Supplier<Boolean> anyArrow = () -> cfg.onScreenEnabled || cfg.offScreenEnabled || cfg.espEnabled;
         Supplier<Boolean> offArrow = () -> cfg.offScreenEnabled;
 
         Supplier<Boolean> arrAdv = addCategory(TAB_ARROWS, "Advanced Settings", anyArrow);
@@ -381,16 +386,15 @@ public class MahikariClickGui extends Screen {
         Supplier<Boolean> smoothChatEnabled = () -> cfg.smoothChat;
         addFloatSlider(TAB_CHAT, "Animation Speed", () -> cfg.smoothChatSpeed, v -> cfg.smoothChatSpeed = (float)v, def.smoothChatSpeed, 0.1, 3.0, "%.1fx").setCondition(smoothChatEnabled).indent();
         addBool(TAB_CHAT, "Infinite Chat (Chat vo han)", () -> cfg.infiniteChat, v -> cfg.infiniteChat = v, def.infiniteChat);
-
         // TEST TAB
         addAction(TAB_TEST, "HUD Layout Editor", "Open Editor", () -> {
             if (this.client != null) this.client.setScreen(new HudEditorScreen(this));
         });
 
         addAction(TAB_TEST, "Test Notifications", "Send Test", () -> {
-            dev.mahikari.client.notification.NotificationManager.addNotification("�6�lLEGENDARY CO THE CRAFT", "Da craft thanh cong Dragon Armor!", 0xFFCC00, 8000);
-            dev.mahikari.client.notification.NotificationManager.addNotification("�b�lAIRDROP", "Airdrop da roi tai 100, 200", 0x00CCFF, 8000);
-            dev.mahikari.client.notification.NotificationManager.addNotification("�c�lWARNING", "Sap thu hep vong bo!", 0xFF3333, 5000);
+            dev.mahikari.client.notification.NotificationManager.addNotification("§6§lLEGENDARY CÓ THỂ CRAFT", "Đã craft thành công Dragon Armor!", 0xFFCC00, 8000);
+            dev.mahikari.client.notification.NotificationManager.addNotification("§b§lAIRDROP", "Airdrop đã rơi tại 100, 200", 0x00CCFF, 8000);
+            dev.mahikari.client.notification.NotificationManager.addNotification("§c§lWARNING", "Sắp thu hẹp vòng bo!", 0xFF3333, 5000);
         });
 
         addAction(TAB_TEST, "Test Team HUD", "Spawn Fake Team", () -> {

@@ -54,7 +54,12 @@ public class NotificationHudRenderer {
         }
 
         float actualW = maxBoxW * scale;
-        int clampedX = (int) Math.max(0, Math.min(sw - actualW, cfg.notificationOffsetX));
+        int clampedX;
+        if (cfg.notificationOffsetX == 9999 || cfg.notificationOffsetX < 0) {
+            clampedX = (int) (sw - actualW - 10);
+        } else {
+            clampedX = (int) Math.max(0, Math.min(sw - actualW, cfg.notificationOffsetX));
+        }
         int anchorY = cfg.notificationOffsetY;
 
         boolean fromRight = (clampedX + actualW / 2) > sw / 2;

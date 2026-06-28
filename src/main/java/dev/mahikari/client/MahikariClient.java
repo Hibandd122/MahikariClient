@@ -33,6 +33,7 @@ public class MahikariClient implements ClientModInitializer {
         KeyBindHandler.register();
         ProjectionCapture.register();
         TeamViewRenderer.register();
+        dev.mahikari.client.render.EspRenderer.register();
         TeamHudRenderer.register();
         EffectHudRenderer.register();
         ChatListener.register();
