@@ -1,0 +1,19 @@
+{
+  "mahikariui.menu.play": "PLAY",
+  "mahikariui.menu.multiplayer": "Multiplayer",
+  "mahikariui.menu.options": "Options",
+  "mahikariui.menu.mods": "Mods",
+  "mahikariui.menu.close": "Close Game",
+  "mahikariui.menu.realms": "Realms",
+  "mahikariui.menu.clean_mode": "Clean Mode",
+  "mahikariui.config.gui.reset.all": "Reset",
+  "mahikariui.config.back": "Back",
+  "mahikariui.config.prev": "Previous",
+  "mahikariui.config.next": "Next",
+  "mahikariui.config.title": "Background Selection",
+  "mahikariui.config.background.apply": "Apply Background",
+  "mahikariui.config.low.quality.mode": "Low Quality Mode: ",
+  "mahikariui.config.low.quality.mode.enable": "ON",
+  "mahikariui.config.low.quality.mode.disable": "OFF",
+  "mahikariui.options.credits": "Credits"
+}

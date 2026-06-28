@@ -5,6 +5,7 @@
     "compatibilityLevel": "JAVA_21",
     "client": [
         "GameRendererAccessor",
+        "GameRendererMixin",
         "FogRendererMixin",
         "ChatHudMixin",
         "InGameHudMixin",

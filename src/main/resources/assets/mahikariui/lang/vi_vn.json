@@ -1,0 +1,19 @@
+{
+  "mahikariui.menu.play": "CHƠI",
+  "mahikariui.menu.multiplayer": "Chơi mạng",
+  "mahikariui.menu.options": "Tùy chọn",
+  "mahikariui.menu.mods": "Mods",
+  "mahikariui.menu.close": "Thoát Game",
+  "mahikariui.menu.realms": "Realms",
+  "mahikariui.menu.clean_mode": "Chế độ tối giản",
+  "mahikariui.config.gui.reset.all": "Đặt lại",
+  "mahikariui.config.back": "Trở về",
+  "mahikariui.config.prev": "Trước",
+  "mahikariui.config.next": "Tiếp",
+  "mahikariui.config.title": "Chọn Ảnh Nền",
+  "mahikariui.config.background.apply": "Áp dụng Ảnh Nền",
+  "mahikariui.config.low.quality.mode": "Cấu hình thấp: ",
+  "mahikariui.config.low.quality.mode.enable": "BẬT",
+  "mahikariui.config.low.quality.mode.disable": "TẮT",
+  "mahikariui.options.credits": "Tác Giả"
+}

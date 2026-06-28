@@ -25,7 +25,7 @@ import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 public class MahikariClickGui extends Screen {
-    private static final int ROW_H = 20;
+    private static final int ROW_H = 22;
     private static final int LEFT_MARGIN = 22;
     private static final int RIGHT_MARGIN = 22;
     private static final int VALUE_W = 90;
@@ -34,7 +34,7 @@ public class MahikariClickGui extends Screen {
     private static final int SEARCH_H = 18;
     private static final int VIEWPORT_TOP = 44;
     private static final int VIEWPORT_BOT = 36;
-    
+
     private static final int TAB_HUD = 0;
     private static final int TAB_ARROWS = 1;
     private static final int TAB_NOTIFY = 2;
@@ -49,42 +49,42 @@ public class MahikariClickGui extends Screen {
     private static final int TAB_LOW_TOTEM = 11;
     private static final int TAB_SMALL_ITEMS = 12;
     private static final int TAB_PERFORMANCE = 13;
-    private static final int TAB_NAMETAG = 14;
-    
+
+    private static final int ACCENT = 0xFF00D9FF;
+    private static final int ACCENT_DARK = 0xFF0099CC;
+    private static final int ACCENT_GLOW = 0x4400D9FF;
+    private static final int PANEL_BG = 0xF5141820;
+    private static final int PANEL_BORDER = 0xFF1E2530;
+    private static final int TEXT_PRIMARY = 0xFFFFFFFF;
+    private static final int TEXT_SECONDARY = 0xFFB0B8CC;
+    private static final int TEXT_MUTED = 0xFF70788C;
+    private static final int CARD_BG_START = 0xFF1A1D2E;
+    private static final int CARD_BG_END = 0xFF0F1220;
+    private static final int CARD_BORDER = 0xFF2D3250;
+    private static final int CARD_BORDER_HOVER = ACCENT;
+    private static final int ENVY_GREEN = 0xFF22C55E;
+    private static final int SUNSET_RED = 0xFFDC2626;
+    private static final int BUTTON_BLUE = 0xFF3B82F6;
+
     private enum ViewMode { GRID, SETTINGS }
     private static ViewMode currentView = ViewMode.GRID;
-    
+
     private static int activeTab = TAB_HUD;
     private static AnimatedFloat scrollAnim = new AnimatedFloat(0f, 0.08f);
-    private AnimatedFloat openAnim = new AnimatedFloat(0f, 0.05f); // Faster for smoother feel
+    private AnimatedFloat openAnim = new AnimatedFloat(0f, 0.05f);
     private boolean isClosing = false;
     private double maxScroll = 0.0;
     private TextFieldWidget searchField;
     private static String searchQuery = "";
 
-    /**
-     * The exact scroll offset and scale factor used in the most recent render().
-     * mouseClicked() must use these exact same values so click positions match
-     * what was painted on screen. Previously, render() called tick() (advancing
-     * the animation) while mouseClicked() called get() later — the two values
-     * could differ, causing a positional drift of several pixels.
-     */
     private float lastRenderedScroll = 0f;
     private float lastRenderedScale = 1f;
-    
+
     private final List<Row> rows = new ArrayList<>();
     private final List<ModuleCard> cards = new ArrayList<>();
 
     private Screen parent;
 
-    /**
-     * Single source of truth for grid placement. Computed once per init from
-     * {@code this.width / this.height} and reused by render, renderBackground
-     * and mouseClicked so the visual cards, the background panel, the click
-     * regions and the scroll math can never drift apart — that drift was the
-     * "click module A → opens module B" bug at GUI scale 1, where 10–20 px of
-     * misalignment between paths swallowed clicks aimed at a card edge.
-     */
     private record GridLayout(int cardW, int cardH, int gap, int cols, int rowCount,
                               int totalW, int contentH, int boxX, int boxY, int boxW, int boxH,
                               int startX, int startY, int viewportTop, int viewportBottom) {}
@@ -92,19 +92,16 @@ public class MahikariClickGui extends Screen {
     private GridLayout layout;
 
     private GridLayout computeGridLayout(int cardCount) {
-        int cardH = 108;
-        int gap = 10;
-        int targetCardW = 150;
-        int maxCols = 4;
-        int minCardW = 130;
+        int cardH = 122;
+        int gap = 8;
+        int targetCardW = 114;
+        int maxCols = 6;
+        int minCardW = 100;
 
-        // Panel padding: cards live inside the visible panel with sidePad on each
-        // horizontal edge and headerPad / footerPad on top / bottom.
-        int sidePad = 18;
-        int headerPad = 24;
+        int sidePad = 14;
+        int headerPad = 22;
         int footerPad = 14;
 
-        // Reserve 30 px of breathing room on each side of the panel.
         int availableW = Math.max(targetCardW, this.width - 60 - 2 * sidePad);
 
         int cols = Math.max(1, Math.min(maxCols, (availableW + gap) / (targetCardW + gap)));
@@ -127,9 +124,6 @@ public class MahikariClickGui extends Screen {
         int startX = boxX + sidePad;
         int startY = boxY + headerPad;
 
-        // Cards live between viewportTop and viewportBottom — clicks outside this
-        // band must NOT hit a card even if the card's geometry happens to extend
-        // there (e.g., a card scrolled out of the viewport).
         int viewportTop = boxY + 20;
         int viewportBottom = boxY + boxH - 4;
 
@@ -149,8 +143,10 @@ public class MahikariClickGui extends Screen {
     @Override
     protected void init() {
         this.rows.clear();
-        if (this.openAnim.target() == 0f) {
+        boolean firstOpen = this.openAnim.target() == 0f;
+        if (firstOpen) {
             this.openAnim.snap(0f);
+            scrollAnim.snap(0f);
         }
         this.isClosing = false;
         this.openAnim.setTarget(1f);
@@ -160,35 +156,34 @@ public class MahikariClickGui extends Screen {
             initSettings();
         }
     }
-    
+
     private void openGrid() {
         this.currentView = ViewMode.GRID;
         this.clearAndInit();
     }
-    
+
     private void openSettings(int tab) {
         this.activeTab = tab;
         this.currentView = ViewMode.SETTINGS;
         this.scrollAnim.snap(0f);
         this.clearAndInit();
     }
-    
+
     private void switchTab(int tab) {
         this.activeTab = tab;
         this.scrollAnim.snap(0f);
         this.clearAndInit();
     }
-    
+
     private void initGrid() {
         cards.clear();
         TeamViewConfig cfg = TeamViewConfig.get();
 
-        // Use a temporary card size for construction — real size is set after layout.
         int tmpW = 200, tmpH = 70;
 
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Team HUD", "Health bars & Status", net.minecraft.item.Items.DIAMOND_HELMET.getDefaultStack(), () -> openSettings(TAB_HUD), () -> cfg.teamHudEnabled, v -> cfg.teamHudEnabled = v));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Indicators", "Player Arrows", net.minecraft.item.Items.COMPASS.getDefaultStack(), () -> openSettings(TAB_ARROWS), () -> cfg.onScreenEnabled, v -> cfg.onScreenEnabled = v));
-        cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Notifications", "Smart Alerts", net.minecraft.item.Items.BELL.getDefaultStack(), () -> openSettings(TAB_NOTIFY), () -> cfg.notificationsEnabled, v -> cfg.notificationsEnabled = v));
+        cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Notifications", "Smart Alerts", net.minecraft.item.Items.ENDER_CHEST.getDefaultStack(), () -> openSettings(TAB_NOTIFY), () -> cfg.notificationsEnabled, v -> cfg.notificationsEnabled = v));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Tests & Tools", "Debug Commands", net.minecraft.item.Items.COMMAND_BLOCK.getDefaultStack(), () -> openSettings(TAB_TEST)));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Effect HUD", "Potion Display", net.minecraft.item.Items.POTION.getDefaultStack(), () -> openSettings(TAB_EFFECTS), () -> cfg.effectHudEnabled, v -> cfg.effectHudEnabled = v));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Auto Sprint", "Sprint Toggle", net.minecraft.item.Items.FEATHER.getDefaultStack(), () -> openSettings(TAB_SPRINT), () -> cfg.autoSprint, v -> cfg.autoSprint = v));
@@ -200,18 +195,6 @@ public class MahikariClickGui extends Screen {
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Low Totem", "Lower Totem View", net.minecraft.item.Items.TOTEM_OF_UNDYING.getDefaultStack(), () -> openSettings(TAB_LOW_TOTEM), () -> cfg.lowTotem, v -> cfg.lowTotem = v));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Small Items", "Resize Items", net.minecraft.item.Items.IRON_SWORD.getDefaultStack(), () -> openSettings(TAB_SMALL_ITEMS), () -> cfg.smallItems, v -> cfg.smallItems = v));
         cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Performance", "Optimize FPS", net.minecraft.item.Items.REDSTONE.getDefaultStack(), () -> openSettings(TAB_PERFORMANCE)));
-        cards.add(new ModuleCard(0, 0, tmpW, tmpH, "Nametags", "Player Name Tags", net.minecraft.item.Items.NAME_TAG.getDefaultStack(), () -> openSettings(TAB_NAMETAG), () -> cfg.nametagEnabled, v -> cfg.nametagEnabled = v));
-
-        if (FabricLoader.getInstance().isModLoaded("mahikariui")) {
-            cards.add(new ModuleCard(0, 0, tmpW, tmpH, "UI Settings", "Animated BG", net.minecraft.item.Items.PAINTING.getDefaultStack(), () -> {
-                if (this.client != null) {
-                    try {
-                        net.minecraft.client.gui.screen.Screen configScreen = (net.minecraft.client.gui.screen.Screen) Class.forName("mahikariui.core.config.screen.ConfigScreen").getConstructor(net.minecraft.client.gui.screen.Screen.class).newInstance(this);
-                        this.client.setScreen(configScreen);
-                    } catch (Exception e) {}
-                }
-            }, null, null));
-        }
 
         this.layout = computeGridLayout(cards.size());
 
@@ -235,11 +218,10 @@ public class MahikariClickGui extends Screen {
     private void initSettings() {
         TeamViewConfig cfg = TeamViewConfig.get();
         TeamViewConfig def = new TeamViewConfig();
-        
-        int panelW = Math.min(380, this.width - 20);
-        int panelH = this.height - 50;
+
+        int panelW = Math.min(420, this.width - 40);
         int panelX = (this.width - panelW) / 2;
-        int panelY = 26;
+        int panelY = 32;
 
         int searchW = 100;
         this.searchField = new TextFieldWidget(this.textRenderer, panelX + panelW - searchW - 14, panelY + 8, searchW, 14, styled("Search..."));
@@ -252,23 +234,23 @@ public class MahikariClickGui extends Screen {
             this.searchField.setText(searchQuery);
         }
         addDrawableChild(this.searchField);
-        
+
         addDrawableChild(ButtonWidget.builder(styled("Back"), b -> openGrid())
             .dimensions(panelX + 12, panelY + 6, 52, 18).build());
 
         // HUD TAB
-
         addBool(TAB_HUD, "Enable Mahikari", () -> cfg.enabled, v -> cfg.enabled = v, def.enabled);
         Supplier<Boolean> tvEnabled = () -> cfg.enabled;
-        
+
         addCycle(TAB_HUD, "View mode", () -> cfg.viewMode, v -> cfg.viewMode = v, def.viewMode, new String[]{"ALL", "PARTY_ONLY", "ALL_PARTY_OFFSCREEN"}, this::filterLabel).setCondition(tvEnabled);
         addBool(TAB_HUD, "Enable Team HUD", () -> cfg.teamHudEnabled, v -> cfg.teamHudEnabled = v, def.teamHudEnabled).setCondition(tvEnabled);
-        
+
         Supplier<Boolean> hudEnabled = () -> cfg.enabled && cfg.teamHudEnabled;
-        
+
         Supplier<Boolean> hudAdv = addCategory(TAB_HUD, "Advanced Settings", hudEnabled);
         Supplier<Boolean> hudAdvCond = () -> hudEnabled.get() && hudAdv.get();
-        
+
+        addBool(TAB_HUD, "Show Background", () -> cfg.teamHudShowBackground, v -> cfg.teamHudShowBackground = v, def.teamHudShowBackground).setCondition(hudAdvCond).indent();
         addBool(TAB_HUD, "Show HP Text", () -> cfg.teamHudShowHpText, v -> cfg.teamHudShowHpText = v, def.teamHudShowHpText).setCondition(hudAdvCond).indent();
         addBool(TAB_HUD, "Show Effects", () -> cfg.teamHudShowEffects, v -> cfg.teamHudShowEffects = v, def.teamHudShowEffects).setCondition(hudAdvCond).indent();
         addBool(TAB_HUD, "Death Animation", () -> cfg.teamHudDeathAnim, v -> cfg.teamHudDeathAnim = v, def.teamHudDeathAnim).setCondition(hudAdvCond).indent();
@@ -278,14 +260,14 @@ public class MahikariClickGui extends Screen {
         // ARROWS TAB
         addBool(TAB_ARROWS, "On-screen arrows", () -> cfg.onScreenEnabled, v -> cfg.onScreenEnabled = v, def.onScreenEnabled);
         addBool(TAB_ARROWS, "Off-screen arrows", () -> cfg.offScreenEnabled, v -> cfg.offScreenEnabled = v, def.offScreenEnabled);
-        
+
         Supplier<Boolean> anyArrow = () -> cfg.onScreenEnabled || cfg.offScreenEnabled;
         Supplier<Boolean> offArrow = () -> cfg.offScreenEnabled;
-        
+
         Supplier<Boolean> arrAdv = addCategory(TAB_ARROWS, "Advanced Settings", anyArrow);
         Supplier<Boolean> anyArrAdvCond = () -> anyArrow.get() && arrAdv.get();
         Supplier<Boolean> offArrAdvCond = () -> offArrow.get() && arrAdv.get();
-        
+
         addBool(TAB_ARROWS, "Show near off-screen", () -> cfg.offScreenNear, v -> cfg.offScreenNear = v, def.offScreenNear).setCondition(offArrAdvCond).indent();
         addFloatSlider(TAB_ARROWS, "Near range", () -> cfg.nearRange, v -> cfg.nearRange = (float)v, def.nearRange, 32.0, 128.0, "%.0f blocks").setCondition(offArrAdvCond).indent();
         addFloatSlider(TAB_ARROWS, "Off-screen scale", () -> cfg.offScreenScale, v -> cfg.offScreenScale = (float)v, def.offScreenScale, 0.25, 2.0, "%.2fx").setCondition(offArrAdvCond).indent();
@@ -296,41 +278,49 @@ public class MahikariClickGui extends Screen {
         // NOTIFY TAB
         addBool(TAB_NOTIFY, "Enable Notifications", () -> cfg.notificationsEnabled, v -> cfg.notificationsEnabled = v, def.notificationsEnabled);
         Supplier<Boolean> notifEnabled = () -> cfg.notificationsEnabled;
-        
+
         addBool(TAB_NOTIFY, "Legendary craft alerts", () -> cfg.notifyLegendary, v -> cfg.notifyLegendary = v, def.notifyLegendary).setCondition(notifEnabled).indent();
         addBool(TAB_NOTIFY, "Airdrop alerts", () -> cfg.notifyAirdrop, v -> cfg.notifyAirdrop = v, def.notifyAirdrop).setCondition(notifEnabled).indent();
         addBool(TAB_NOTIFY, "Craftable item alerts", () -> cfg.notifyCraftable, v -> cfg.notifyCraftable = v, def.notifyCraftable).setCondition(notifEnabled).indent();
         addBool(TAB_NOTIFY, "Play notification sound", () -> cfg.notificationSound, v -> cfg.notificationSound = v, def.notificationSound).setCondition(notifEnabled).indent();
-        
+
         Supplier<Boolean> notifAdv = addCategory(TAB_NOTIFY, "Visual Settings", notifEnabled);
         Supplier<Boolean> notifAdvCond = () -> notifEnabled.get() && notifAdv.get();
-        
+
         addBool(TAB_NOTIFY, "Show Background", () -> cfg.notificationShowBackground, v -> cfg.notificationShowBackground = v, def.notificationShowBackground).setCondition(notifAdvCond).indent();
         addBool(TAB_NOTIFY, "Show Glass Border", () -> cfg.notificationShowBorder, v -> cfg.notificationShowBorder = v, def.notificationShowBorder).setCondition(notifAdvCond).indent();
-        addBool(TAB_NOTIFY, "Show Progress Bar", () -> cfg.notificationShowProgress, v -> cfg.notificationShowProgress = v, def.notificationShowProgress).setCondition(notifAdvCond).indent();
         addBool(TAB_NOTIFY, "Show Icon Box", () -> cfg.notificationShowIconBox, v -> cfg.notificationShowIconBox = v, def.notificationShowIconBox).setCondition(notifAdvCond).indent();
         addBool(TAB_NOTIFY, "Show Shimmer Effect", () -> cfg.notificationShowShimmer, v -> cfg.notificationShowShimmer = v, def.notificationShowShimmer).setCondition(notifAdvCond).indent();
         addFloatSlider(TAB_NOTIFY, "Duration multiplier", () -> cfg.notificationDurationMul, v -> cfg.notificationDurationMul = (float)v, def.notificationDurationMul, 0.25, 3.0, "%.2fx").setCondition(notifAdvCond).indent();
         addIntSlider(TAB_NOTIFY, "Max notifications shown", () -> cfg.notificationMaxStack, v -> cfg.notificationMaxStack = v, def.notificationMaxStack, 1, 8, "%d").setCondition(notifAdvCond).indent();
-        
+
         // PERFORMANCE TAB
-        addCycle(TAB_PERFORMANCE, "UI Quality", () -> cfg.uiQuality, v -> cfg.uiQuality = v, def.uiQuality, new String[]{"MEDIUM", "LOW"}, this::filterLabel);
+        addCycle(TAB_PERFORMANCE, "UI Quality", () -> cfg.uiQuality, v -> {
+            cfg.uiQuality = v;
+            if (FabricLoader.getInstance().isModLoaded("mahikariui")) {
+                try {
+                    Class<?> configClass = Class.forName("mahikariui.core.config.Config");
+                    Object instance = configClass.getMethod("getInstance").invoke(null);
+                    configClass.getMethod("setLowQualityMode", boolean.class).invoke(instance, "LOW".equals(v));
+                } catch (Exception e) {}
+            }
+        }, def.uiQuality, new String[]{"MEDIUM", "LOW"}, this::filterLabel);
         addBool(TAB_PERFORMANCE, "No Background (ClickGui)", () -> cfg.clickGuiNoBackground, v -> cfg.clickGuiNoBackground = v, def.clickGuiNoBackground);
-        
+
         // VISUALS TAB
         addBool(TAB_VISUALS, "Enable Visuals Module", () -> cfg.visualsEnabled, v -> cfg.visualsEnabled = v, def.visualsEnabled);
         Supplier<Boolean> visualsEnabled = () -> cfg.visualsEnabled;
-        
-        addBool(TAB_VISUALS, "FullBright (Nhìn xuyên đêm)", () -> cfg.fullBright, v -> cfg.fullBright = v, def.fullBright).setCondition(visualsEnabled);
+
+        addBool(TAB_VISUALS, "FullBright (Nhin xuyen dem)", () -> cfg.fullBright, v -> cfg.fullBright = v, def.fullBright).setCondition(visualsEnabled);
         Supplier<Boolean> fullBrightEnabled = () -> cfg.visualsEnabled && cfg.fullBright;
         addFloatSlider(TAB_VISUALS, "Brightness Level", () -> cfg.fullBrightLevel, v -> cfg.fullBrightLevel = (float)v, def.fullBrightLevel, 0.0, 1.0, "%.2f").setCondition(fullBrightEnabled).indent();
-        
-        addBool(TAB_VISUALS, "NoFog (Xóa sương mù)", () -> cfg.noFog, v -> cfg.noFog = v, def.noFog).setCondition(visualsEnabled);
+
+        addBool(TAB_VISUALS, "NoFog (Xoa suong mu)", () -> cfg.noFog, v -> cfg.noFog = v, def.noFog).setCondition(visualsEnabled);
         Supplier<Boolean> noFogEnabled = () -> cfg.visualsEnabled && cfg.noFog;
         addFloatSlider(TAB_VISUALS, "Fog Density", () -> cfg.noFogDensity, v -> cfg.noFogDensity = (float)v, def.noFogDensity, 0.0, 1.0, "%.2f").setCondition(noFogEnabled).indent();
 
-        addBool(TAB_VISUALS, "Clear Water / Lava (Nhìn xuyên chất lỏng)", () -> cfg.clearFluids, v -> cfg.clearFluids = v, def.clearFluids).setCondition(visualsEnabled);
-        
+        addBool(TAB_VISUALS, "Clear Water / Lava (Nhin xuyen chat long)", () -> cfg.clearFluids, v -> cfg.clearFluids = v, def.clearFluids).setCondition(visualsEnabled);
+
         // HIDE ARMOR TAB
         addBool(TAB_HIDE_ARMOR, "Hide Player Armor", () -> cfg.hideArmor, v -> cfg.hideArmor = v, def.hideArmor);
         Supplier<Boolean> hideArmorEnabled = () -> cfg.hideArmor;
@@ -338,32 +328,32 @@ public class MahikariClickGui extends Screen {
             new String[]{"ALL", "SELF_ONLY", "OTHERS_ONLY"}, this::filterLabel).setCondition(hideArmorEnabled).indent();
 
         // LOW FIRE TAB
-        addBool(TAB_LOW_FIRE, "Low Fire (Giảm lửa che mắt)", () -> cfg.lowFire, v -> cfg.lowFire = v, def.lowFire);
+        addBool(TAB_LOW_FIRE, "Low Fire (Giam lua che mat)", () -> cfg.lowFire, v -> cfg.lowFire = v, def.lowFire);
         Supplier<Boolean> fireEnabled = () -> cfg.lowFire;
         addFloatSlider(TAB_LOW_FIRE, "Fire Offset", () -> cfg.fireHeight, v -> cfg.fireHeight = (float)v, def.fireHeight, 0.0, 1.0, "%.2f").setCondition(fireEnabled).indent();
 
         // LOW SHIELD TAB
-        addBool(TAB_LOW_SHIELD, "Low Shield (Hạ thấp khiên)", () -> cfg.lowShield, v -> cfg.lowShield = v, def.lowShield);
+        addBool(TAB_LOW_SHIELD, "Low Shield (Ha thap khien)", () -> cfg.lowShield, v -> cfg.lowShield = v, def.lowShield);
         Supplier<Boolean> shieldEnabled = () -> cfg.lowShield;
         addFloatSlider(TAB_LOW_SHIELD, "Shield Offset", () -> cfg.shieldHeight, v -> cfg.shieldHeight = (float)v, def.shieldHeight, -1.0, 0.0, "%.2f").setCondition(shieldEnabled).indent();
 
         // LOW TOTEM TAB
-        addBool(TAB_LOW_TOTEM, "Low Totem (Hạ thấp Totem)", () -> cfg.lowTotem, v -> cfg.lowTotem = v, def.lowTotem);
+        addBool(TAB_LOW_TOTEM, "Low Totem (Ha thap Totem)", () -> cfg.lowTotem, v -> cfg.lowTotem = v, def.lowTotem);
         Supplier<Boolean> totemEnabled = () -> cfg.lowTotem;
         addFloatSlider(TAB_LOW_TOTEM, "Totem Offset", () -> cfg.totemHeight, v -> cfg.totemHeight = (float)v, def.totemHeight, -1.0, 0.0, "%.2f").setCondition(totemEnabled).indent();
         addFloatSlider(TAB_LOW_TOTEM, "Totem Scale", () -> cfg.totemScale, v -> cfg.totemScale = (float)v, def.totemScale, 0.1, 1.5, "%.2fx").setCondition(totemEnabled).indent();
 
         // SMALL ITEMS TAB
-        addBool(TAB_SMALL_ITEMS, "Small Items (Đồ cầm tay nhỏ)", () -> cfg.smallItems, v -> cfg.smallItems = v, def.smallItems);
+        addBool(TAB_SMALL_ITEMS, "Small Items (Do cam tay nho)", () -> cfg.smallItems, v -> cfg.smallItems = v, def.smallItems);
         Supplier<Boolean> itemsEnabled = () -> cfg.smallItems;
         addFloatSlider(TAB_SMALL_ITEMS, "Item Scale", () -> cfg.itemScale, v -> cfg.itemScale = (float)v, def.itemScale, 0.1, 1.5, "%.2fx").setCondition(itemsEnabled).indent();
         addFloatSlider(TAB_SMALL_ITEMS, "Item Offset X", () -> cfg.itemOffsetX, v -> cfg.itemOffsetX = (float)v, def.itemOffsetX, -1.0, 1.0, "%.2f").setCondition(itemsEnabled).indent();
         addFloatSlider(TAB_SMALL_ITEMS, "Item Offset Y", () -> cfg.itemOffsetY, v -> cfg.itemOffsetY = (float)v, def.itemOffsetY, -1.0, 1.0, "%.2f").setCondition(itemsEnabled).indent();
-        
+
         Supplier<Boolean> physicsEnabled = addCategory(TAB_SMALL_ITEMS, "Item Physics", null);
         addBool(TAB_SMALL_ITEMS, "Enable ItemPhysics", () -> cfg.itemPhysicsEnabled, v -> cfg.itemPhysicsEnabled = v, def.itemPhysicsEnabled).setCondition(physicsEnabled).indent();
         addCycle(TAB_SMALL_ITEMS, "Physics Mode", () -> cfg.itemPhysicsMode, v -> cfg.itemPhysicsMode = v, def.itemPhysicsMode, new String[]{"PHYSICS", "2D"}, String::toString).setCondition(physicsEnabled).indent();
-        
+
         // EFFECTS TAB
         addBool(TAB_EFFECTS, "Enable Effect HUD", () -> cfg.effectHudEnabled, v -> cfg.effectHudEnabled = v, def.effectHudEnabled);
         Supplier<Boolean> effectEnabled = () -> cfg.effectHudEnabled;
@@ -372,11 +362,11 @@ public class MahikariClickGui extends Screen {
         addCycle(TAB_EFFECTS, "Layout Style", () -> cfg.effectHudLayout, v -> cfg.effectHudLayout = v, def.effectHudLayout, new String[]{"VERTICAL", "HORIZONTAL"}, this::filterLabel).setCondition(effectEnabled).indent();
         addBool(TAB_EFFECTS, "Show Amplifier Level", () -> cfg.effectHudShowAmplifier, v -> cfg.effectHudShowAmplifier = v, def.effectHudShowAmplifier).setCondition(effectEnabled).indent();
         addCycle(TAB_EFFECTS, "Sort By", () -> cfg.effectHudSortMode, v -> cfg.effectHudSortMode = v, def.effectHudSortMode, new String[]{"DURATION", "ALPHABETICAL"}, this::filterLabel).setCondition(effectEnabled).indent();
-        
+
         // SPRINT TAB
-        addBool(TAB_SPRINT, "AutoSprint (Tự động chạy nhanh)", () -> cfg.autoSprint, v -> cfg.autoSprint = v, def.autoSprint);
+        addBool(TAB_SPRINT, "AutoSprint (Tu dong chay nhanh)", () -> cfg.autoSprint, v -> cfg.autoSprint = v, def.autoSprint);
         Supplier<Boolean> sprintEnabled = () -> cfg.autoSprint;
-        
+
         addBool(TAB_SPRINT, "Show HUD Indicator", () -> cfg.sprintingShowHud, v -> cfg.sprintingShowHud = v, def.sprintingShowHud).setCondition(sprintEnabled).indent();
         Supplier<Boolean> sprintHudEnabled = () -> cfg.autoSprint && cfg.sprintingShowHud;
         addBool(TAB_SPRINT, "Animated HUD", () -> cfg.sprintingAnimated, v -> cfg.sprintingAnimated = v, def.sprintingAnimated).setCondition(sprintHudEnabled).indent();
@@ -384,57 +374,48 @@ public class MahikariClickGui extends Screen {
         addBool(TAB_SPRINT, "Show Bracket Border", () -> cfg.sprintingShowBorder, v -> cfg.sprintingShowBorder = v, def.sprintingShowBorder).setCondition(sprintHudEnabled).indent();
         addCycle(TAB_SPRINT, "Text Color", () -> cfg.sprintingTextColor, v -> cfg.sprintingTextColor = v, def.sprintingTextColor, new String[]{"WHITE", "GREEN", "RED", "BLUE", "YELLOW", "GOLD", "AQUA", "PINK"}, this::filterLabel).setCondition(sprintHudEnabled).indent();
         addFloatSlider(TAB_SPRINT, "Scale", () -> cfg.sprintingScale, v -> cfg.sprintingScale = (float)v, def.sprintingScale, 0.5, 3.0, "%.2fx").setCondition(sprintHudEnabled).indent();
-        
-        // NAMETAG TAB
-        addBool(TAB_NAMETAG, "Enable Nametag", () -> cfg.nametagEnabled, v -> cfg.nametagEnabled = v, def.nametagEnabled);
-        Supplier<Boolean> nametagEnabled = () -> cfg.nametagEnabled;
-        addBool(TAB_NAMETAG, "No Background", () -> cfg.nametagNoBackground, v -> cfg.nametagNoBackground = v, def.nametagNoBackground).setCondition(nametagEnabled).indent();
-        Supplier<Boolean> nametagBgEnabled = () -> cfg.nametagEnabled && !cfg.nametagNoBackground;
-        addCycle(TAB_NAMETAG, "Background Color", () -> cfg.nametagBackgroundColor, v -> cfg.nametagBackgroundColor = v, def.nametagBackgroundColor,
-            new String[]{"BLACK", "WHITE", "RED", "GREEN", "BLUE", "TRANSPARENT"}, this::filterLabel).setCondition(nametagBgEnabled).indent();
-        addBool(TAB_NAMETAG, "Show Teammates Too", () -> cfg.nametagShowTeammates, v -> cfg.nametagShowTeammates = v, def.nametagShowTeammates).setCondition(nametagEnabled).indent();
-        addBool(TAB_NAMETAG, "Show Own Nametag (3rd person)", () -> cfg.nametagShowSelf, v -> cfg.nametagShowSelf = v, def.nametagShowSelf).setCondition(nametagEnabled).indent();
-        addFloatSlider(TAB_NAMETAG, "Scale", () -> cfg.nametagScale, v -> cfg.nametagScale = (float)v, def.nametagScale, 0.3, 3.0, "%.2fx").setCondition(nametagEnabled).indent();
-        addFloatSlider(TAB_NAMETAG, "Max Distance", () -> cfg.nametagMaxDistance, v -> cfg.nametagMaxDistance = (float)v, def.nametagMaxDistance, 16.0, 512.0, "%.0f blocks").setCondition(nametagEnabled).indent();
+
 
         // CHAT TAB
         addBool(TAB_CHAT, "Smooth Chat", () -> cfg.smoothChat, v -> cfg.smoothChat = v, def.smoothChat);
         Supplier<Boolean> smoothChatEnabled = () -> cfg.smoothChat;
         addFloatSlider(TAB_CHAT, "Animation Speed", () -> cfg.smoothChatSpeed, v -> cfg.smoothChatSpeed = (float)v, def.smoothChatSpeed, 0.1, 3.0, "%.1fx").setCondition(smoothChatEnabled).indent();
-        addBool(TAB_CHAT, "Infinite Chat (Chat vô hạn)", () -> cfg.infiniteChat, v -> cfg.infiniteChat = v, def.infiniteChat);
-        
+        addBool(TAB_CHAT, "Infinite Chat (Chat vo han)", () -> cfg.infiniteChat, v -> cfg.infiniteChat = v, def.infiniteChat);
+
         // TEST TAB
         addAction(TAB_TEST, "HUD Layout Editor", "Open Editor", () -> {
             if (this.client != null) this.client.setScreen(new HudEditorScreen(this));
         });
-        
+
         addAction(TAB_TEST, "Test Notifications", "Send Test", () -> {
-            dev.mahikari.client.notification.NotificationManager.addNotification("§6§lLEGENDARY CÓ THỂ CRAFT", "Đã craft thành công Dragon Armor!", 0xFFCC00, 8000);
-            dev.mahikari.client.notification.NotificationManager.addNotification("§b§lAIRDROP", "Airdrop đã rơi tại 100, 200", 0x00CCFF, 8000);
-            dev.mahikari.client.notification.NotificationManager.addNotification("§c§lWARNING", "Sắp thu hẹp vòng bo!", 0xFF3333, 5000);
+            dev.mahikari.client.notification.NotificationManager.addNotification("�6�lLEGENDARY CO THE CRAFT", "Da craft thanh cong Dragon Armor!", 0xFFCC00, 8000);
+            dev.mahikari.client.notification.NotificationManager.addNotification("�b�lAIRDROP", "Airdrop da roi tai 100, 200", 0x00CCFF, 8000);
+            dev.mahikari.client.notification.NotificationManager.addNotification("�c�lWARNING", "Sap thu hep vong bo!", 0xFF3333, 5000);
         });
 
         addAction(TAB_TEST, "Test Team HUD", "Spawn Fake Team", () -> {
             net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
-            if (mc.player != null) {
+            if (mc.player != null && mc.world != null) {
                 double x = mc.player.getX();
                 double y = mc.player.getY();
                 double z = mc.player.getZ();
                 String world = mc.world.getRegistryKey().getValue().getPath();
                 dev.mahikari.client.TeamViewManager mgr = dev.mahikari.client.MahikariClient.MANAGER;
-                mgr.updatePosition("TestPlayer1", world, x + 5, y, z + 5, "king", "");
-                mgr.updatePosition("TestPlayer2", world, x - 5, y, z - 5, "party", "");
-                mgr.updatePosition("TestPlayer3", world, x + 10, y, z, "", "");
+                mgr.updatePosition("TestPlayer1", world, x + 5, y, z + 5, "plains", "king");
+                mgr.updatePosition("TestPlayer2", world, x - 5, y, z - 5, "forest", "vip");
+                mgr.updatePosition("TestPlayer3", world, x + 10, y, z, "desert", "party");
+                mgr.updatePosition("TestPlayer4", world, x - 10, y, z, "taiga", "team");
                 mgr.updateHealth("TestPlayer1", 20.0f, 20.0f, 0.0f);
                 mgr.updateHealth("TestPlayer2", 10.0f, 20.0f, 0.0f);
                 mgr.updateHealth("TestPlayer3", 1.0f, 20.0f, 0.0f);
+                mgr.updateHealth("TestPlayer4", 16.0f, 20.0f, 0.0f);
             }
         });
 
         addAction(TAB_TEST, "Test Team Damage & Heal", "Simulate", () -> {
             dev.mahikari.client.TeamViewManager mgr = dev.mahikari.client.MahikariClient.MANAGER;
-            mgr.updateHealth("TestPlayer1", 5.0f, 20.0f, 0.0f); // Damage
-            mgr.updateHealth("TestPlayer2", 20.0f, 20.0f, 0.0f); // Heal
+            mgr.updateHealth("TestPlayer1", 5.0f, 20.0f, 0.0f);
+            mgr.updateHealth("TestPlayer2", 20.0f, 20.0f, 0.0f);
         });
 
         addAction(TAB_TEST, "Test Effect HUD", "Give Effects", () -> {
@@ -453,7 +434,6 @@ public class MahikariClickGui extends Screen {
             if (mc.player != null) mc.player.clearStatusEffects();
         });
 
-        // Hide all rows initially to prevent them from flashing for 1 tick
         for (Row r : this.rows) {
             if (r.valBtn != null) r.valBtn.visible = false;
             if (r.resBtn != null) r.resBtn.visible = false;
@@ -468,12 +448,13 @@ public class MahikariClickGui extends Screen {
 
     private Supplier<Boolean> addCategory(int section, String label, Supplier<Boolean> parentCond) {
         boolean[] expanded = {false};
-        ButtonWidget btn = ButtonWidget.builder(styled("+"), b -> {
+        ButtonWidget btn = ButtonWidget.builder(styled("\u00a7a+"), b -> {
             expanded[0] = !expanded[0];
-            b.setMessage(styled(expanded[0] ? "-" : "+"));
-        }).dimensions(0, 0, 20, 20).build();
-        Row r = new Row(section, "§e" + label, btn, null);
+            b.setMessage(styled(expanded[0] ? "\u00a7c-" : "\u00a7a+"));
+        }).dimensions(0, 0, 22, 22).build();
+        Row r = new Row(section, "\u00a7e" + label, btn, null);
         r.visibilityCond = parentCond;
+        r.isCategory = true;
         rows.add(r);
         addDrawableChild(btn);
         return () -> expanded[0];
@@ -484,8 +465,8 @@ public class MahikariClickGui extends Screen {
     }
 
     private Row addBool(int section, String label, Supplier<Boolean> get, Consumer<Boolean> set, boolean defVal) {
-        ConfigToggle toggle = new ConfigToggle(0, 0, 48, 20, get, set);
-        ButtonWidget reset = ButtonWidget.builder(styled("§7Reset"), b -> {
+        ConfigToggle toggle = new ConfigToggle(0, 0, 28, 20, get, set);
+        ButtonWidget reset = ButtonWidget.builder(styled("\u00a77Reset"), b -> {
             set.accept(defVal);
             TeamViewConfig.save();
         }).dimensions(0, 0, RESET_W, 20).build();
@@ -509,7 +490,7 @@ public class MahikariClickGui extends Screen {
             TeamViewConfig.save();
             holder[0].setMessage(Text.literal(display.apply(next)));
         }).dimensions(0, 0, VALUE_W, 20).build();
-        ButtonWidget reset = ButtonWidget.builder(Text.literal("§7Reset"), b -> {
+        ButtonWidget reset = ButtonWidget.builder(Text.literal("\u00a77Reset"), b -> {
             set.accept(defVal);
             TeamViewConfig.save();
             holder[0].setMessage(Text.literal(display.apply(defVal)));
@@ -523,7 +504,7 @@ public class MahikariClickGui extends Screen {
 
     private Row addIntSlider(int section, String label, IntSupplier get, IntConsumer set, int defVal, int min, int max, String fmt) {
         ConfigIntSlider slider = new ConfigIntSlider(0, 0, VALUE_W, 20, get.getAsInt(), min, max, fmt, set);
-        ButtonWidget reset = ButtonWidget.builder(styled("§7Reset"), b -> {
+        ButtonWidget reset = ButtonWidget.builder(styled("\u00a77Reset"), b -> {
             slider.setIntValue(defVal);
             TeamViewConfig.save();
         }).dimensions(0, 0, RESET_W, 20).build();
@@ -536,7 +517,7 @@ public class MahikariClickGui extends Screen {
 
     private Row addFloatSlider(int section, String label, DoubleSupplier get, DoubleConsumer set, double defVal, double min, double max, String fmt) {
         ConfigFloatSlider slider = new ConfigFloatSlider(0, 0, VALUE_W, 20, get.getAsDouble(), min, max, fmt, set);
-        ButtonWidget reset = ButtonWidget.builder(styled("§7Reset"), b -> {
+        ButtonWidget reset = ButtonWidget.builder(styled("\u00a77Reset"), b -> {
             slider.setDoubleValue(defVal);
             TeamViewConfig.save();
         }).dimensions(0, 0, RESET_W, 20).build();
@@ -548,17 +529,19 @@ public class MahikariClickGui extends Screen {
     }
 
     private Row addAction(int section, String label, String btnText, Runnable action, Runnable resetAction) {
-        ButtonWidget act = ButtonWidget.builder(styled("§f" + btnText), b -> action.run()).dimensions(0, 0, VALUE_W, 20).build();
-        ButtonWidget reset = ButtonWidget.builder(styled("§7Reset"), b -> resetAction.run()).dimensions(0, 0, RESET_W, 20).build();
+        ButtonWidget act = ButtonWidget.builder(styled("\u00a7f" + btnText), b -> action.run()).dimensions(0, 0, VALUE_W, 20).build();
+        ButtonWidget reset = ButtonWidget.builder(styled("\u00a77Reset"), b -> {
+            if (resetAction != null) resetAction.run();
+        }).dimensions(0, 0, RESET_W, 20).build();
         Row r = new Row(section, label, act, reset);
         rows.add(r);
         addDrawableChild(act);
         addDrawableChild(reset);
         return r;
     }
-    
+
     private Row addAction(int section, String label, String btnText, Runnable action) {
-        ButtonWidget act = ButtonWidget.builder(styled("§f" + btnText), b -> action.run()).dimensions(0, 0, VALUE_W, 20).build();
+        ButtonWidget act = ButtonWidget.builder(styled("\u00a7f" + btnText), b -> action.run()).dimensions(0, 0, VALUE_W, 20).build();
         Row r = new Row(section, label, act, null);
         rows.add(r);
         addDrawableChild(act);
@@ -588,54 +571,55 @@ public class MahikariClickGui extends Screen {
 
         float scrollOffset = isLowQuality ? this.scrollAnim.target() : this.scrollAnim.tick();
 
-        // Store the exact values used for rendering so mouseClicked can use
-        // the same ones — eliminates positional drift between frames.
         float scale = isLowQuality ? 1.0f : (0.90f + 0.10f * animProgress);
         this.lastRenderedScroll = scrollOffset;
         this.lastRenderedScale = scale;
 
         if (!noBg) {
-            // Modern gradient background with enhanced depth
             int bgAlpha1 = (int)(0xF5 * animProgress);
             int bgAlpha2 = (int)(0xEE * animProgress);
             int bgColor1 = (bgAlpha1 << 24) | 0x0A0B10;
             int bgColor2 = (bgAlpha2 << 24) | 0x050508;
             ctx.fillGradient(0, 0, this.width, this.height, bgColor1, bgColor2);
+
+            if (!isLowQuality) {
+                int accentGlowAlpha = (int)(30 * animProgress);
+                int accentGlow = (accentGlowAlpha << 24) | 0x00D9FF;
+                ctx.fillGradient(0, 0, this.width, 1, accentGlow, 0x00000000);
+                ctx.fillGradient(this.width - 1, 0, this.width, this.height, accentGlow, 0x00000000);
+            }
         }
 
         ctx.getMatrices().pushMatrix();
-        // Enhanced open animation with smooth scale
         ctx.getMatrices().translate(this.width / 2.0f, this.height / 2.0f);
         ctx.getMatrices().scale(scale, scale);
         ctx.getMatrices().translate(-this.width / 2.0f, -this.height / 2.0f);
 
         if (!noBg) {
-            // Draw modern header with gradient
-            int headerH = 38;
+            int headerH = 40;
             ctx.fillGradient(0, 0, this.width, headerH, applyAlpha(0xCC0F1419, animProgress), applyAlpha(0x880A0B10, animProgress));
-            ctx.fill(0, headerH - 1, this.width, headerH, applyAlpha(0xFF00D9FF, animProgress * 0.3f));
+            ctx.fill(0, headerH - 1, this.width, headerH, applyAlpha(ACCENT, animProgress * 0.25f));
 
-            // Logo with glow effect
-            int logoGlowAlpha = (int)(60 * animProgress);
-            int logoGlow = (logoGlowAlpha << 24) | 0x00D9FF;
-            ctx.fill(6, 6, 36, 36, logoGlow);
+            int logoGlowAlpha = (int)(80 * animProgress);
+            int logoGlowColor = (logoGlowAlpha << 24) | 0x00D9FF;
+            fillRounded(ctx, 6, 6, 36, 36, logoGlowColor, 6);
+            fillRounded(ctx, 8, 8, 34, 34, applyAlpha(0x22000000, animProgress), 5);
 
-            ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, net.minecraft.util.Identifier.of("mahikari-client", "textures/gui/logo.png"), 9, 9, 0.0f, 0.0f, 24, 24, 24, 24);
+            ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, net.minecraft.util.Identifier.of("mahikari-client", "textures/gui/logo.png"), 10, 10, 0.0f, 0.0f, 22, 22, 22, 22);
 
-            // Modern title with gradient text effect
-            ctx.drawTextWithShadow(this.textRenderer, "§b§lMahikari", 40, 12, applyAlpha(0xFF00D9FF, animProgress));
-            ctx.drawTextWithShadow(this.textRenderer, "§f§lClient", 40 + this.textRenderer.getWidth("Mahikari "), 12, applyAlpha(0xFFFFFFFF, animProgress));
+            ctx.drawTextWithShadow(this.textRenderer, "\u00a7b\u00a7lMahikari", 42, 11, applyAlpha(ACCENT, animProgress));
+            ctx.drawTextWithShadow(this.textRenderer, "\u00a7f\u00a7lClient", 42 + this.textRenderer.getWidth("Mahikari "), 11, applyAlpha(TEXT_PRIMARY, animProgress));
 
-            // Version badge
             String version = "v2.0";
             int versionW = this.textRenderer.getWidth(version);
-            int badgeX = 40 + this.textRenderer.getWidth("Mahikari Client ") + 4;
-            int badgeY = 14;
-            fillRounded(ctx, badgeX, badgeY, badgeX + versionW + 8, badgeY + 12, applyAlpha(0x8800D9FF, animProgress), 6);
+            int badgeX = 42 + this.textRenderer.getWidth("Mahikari Client ") + 4;
+            int badgeY = 13;
+            fillRounded(ctx, badgeX, badgeY, badgeX + versionW + 10, badgeY + 12, applyAlpha(0x9900D9FF, animProgress), 6);
+            ctx.fillGradient(badgeX, badgeY, badgeX + versionW + 10, badgeY + 12, applyAlpha(0x2200D9FF, animProgress), 0x00000000);
             ctx.getMatrices().pushMatrix();
-            ctx.getMatrices().translate(badgeX + 4, badgeY + 2);
+            ctx.getMatrices().translate(badgeX + 5, badgeY + 2);
             ctx.getMatrices().scale(0.7f, 0.7f);
-            ctx.drawTextWithShadow(this.textRenderer, version, 0, 0, applyAlpha(0xFFFFFFFF, animProgress));
+            ctx.drawTextWithShadow(this.textRenderer, version, 0, 0, applyAlpha(TEXT_PRIMARY, animProgress));
             ctx.getMatrices().popMatrix();
         }
 
@@ -648,39 +632,37 @@ public class MahikariClickGui extends Screen {
                 return;
             }
 
-            // Scissor to the panel interior so cards scrolling past the edges
-            // don't paint over the header/footer or the scrollbar.
             ctx.enableScissor(l.boxX(), l.viewportTop(), l.boxX() + l.boxW(), l.viewportBottom());
             for (ModuleCard c : cards) {
                 c.render(ctx, mouseX, mouseY, delta);
             }
             ctx.disableScissor();
 
-            // Modern scrollbar
             if (maxScroll > 0) {
-                int trackX = l.boxX() + l.boxW() - 12;
-                int trackW = 6;
+                int trackX = l.boxX() + l.boxW() - 10;
+                int trackW = 4;
                 int thumbH = Math.max(24, (int)((float)l.boxH() * l.boxH() / l.contentH()));
                 int thumbY = l.boxY() + (int)((l.boxH() - thumbH) * (scrollOffset / maxScroll));
 
-                fillRounded(ctx, trackX, l.boxY() + 20, trackX + trackW, l.boxY() + l.boxH() - 2, 0x33FFFFFF, 3);
-                fillRoundedGradient(ctx, trackX, thumbY, trackX + trackW, thumbY + thumbH, 0xFF00D9FF, 0xFF0099CC, 3);
-                ctx.fillGradient(trackX + 1, thumbY + 1, trackX + trackW - 1, thumbY + 4, 0x44FFFFFF, 0x00FFFFFF);
+                fillRounded(ctx, trackX, l.boxY() + 20, trackX + trackW, l.boxY() + l.boxH() - 2, 0x22FFFFFF, 2);
+                fillRoundedGradient(ctx, trackX, thumbY, trackX + trackW, thumbY + thumbH, applyAlpha(ACCENT, 0.7f), applyAlpha(ACCENT_DARK, 0.7f), 2);
+                fillRounded(ctx, trackX - 1, thumbY - 1, trackX + trackW + 1, thumbY + thumbH + 1, applyAlpha(ACCENT, 0.15f), 3);
             }
 
             ctx.getMatrices().popMatrix();
             return;
         }
 
-        int panelW = Math.min(400, this.width - 40);
+        int panelW = Math.min(420, this.width - 40);
         int panelH = this.height - 66;
         int panelX = (this.width - panelW) / 2;
         int panelY = 32;
-        int vpTop = panelY + 34;
+        int vpTop = panelY + 36;
         int vpBot = panelY + panelH - 2;
 
         int curY = vpTop + 4;
         int visibleCount = 0;
+        int rowIndex = 0;
 
         for (Row r : this.rows) {
             boolean matchSearch = searchQuery.isEmpty() || r.label.toLowerCase(Locale.ROOT).contains(searchQuery);
@@ -695,6 +677,10 @@ public class MahikariClickGui extends Screen {
                 if (r.resBtn != null) r.resBtn.visible = fullyIn;
 
                 if (fullyIn) {
+                    if (!r.isCategory && rowIndex % 2 == 0) {
+                        ctx.fill(panelX + 10, displayY, panelX + panelW - 10, displayY + ROW_H, applyAlpha(0x08FFFFFF, animProgress));
+                    }
+
                     int maxValRight = panelX + panelW - 20;
                     if (r.resBtn != null) {
                         r.resBtn.setX(maxValRight - RESET_W);
@@ -704,12 +690,20 @@ public class MahikariClickGui extends Screen {
                     r.valBtn.setX(maxValRight - r.valBtn.getWidth());
                     r.valBtn.setY(displayY + 2);
 
-                    int textX = panelX + 24 + r.indentLevel;
-                    int textColor = r.indentLevel > 0 ? 0xFFB0B8CC : 0xFFFFFFFF;
+                    int textX = panelX + 22 + r.indentLevel;
+                    int textColor;
+                    if (r.isCategory) {
+                        textColor = 0xFFFFD700;
+                    } else if (r.indentLevel > 0) {
+                        textColor = TEXT_SECONDARY;
+                    } else {
+                        textColor = TEXT_PRIMARY;
+                    }
                     ctx.drawText(this.textRenderer, styled(r.label), textX, displayY + 7, textColor, true);
                 }
                 curY += ROW_H;
                 visibleCount++;
+                rowIndex++;
             } else {
                 r.valBtn.visible = false;
                 if (r.resBtn != null) r.resBtn.visible = false;
@@ -722,24 +716,23 @@ public class MahikariClickGui extends Screen {
         this.scrollAnim.setTarget((float)Math.max(0, Math.min(this.maxScroll, this.scrollAnim.target())));
 
         if (visibleCount == 0) {
-            ctx.drawCenteredTextWithShadow(this.textRenderer, styled("§7No settings found"), this.width / 2, vpTop + 30, 0xFFFFFFFF);
+            ctx.drawCenteredTextWithShadow(this.textRenderer, styled("\u00a77No settings found"), this.width / 2, vpTop + 30, TEXT_PRIMARY);
         }
 
-        // Modern scrollbar for settings
         if (maxScroll > 0) {
             int trackX = panelX + panelW - 10;
-            int trackW = 6;
+            int trackW = 4;
             int thumbH = Math.max(24, (int)((float)viewH * viewH / totalH));
             int thumbY = vpTop + (int)((viewH - thumbH) * (scrollOffset / maxScroll));
 
-            fillRounded(ctx, trackX, vpTop, trackX + trackW, vpBot, 0x33FFFFFF, 3);
-            fillRoundedGradient(ctx, trackX, thumbY, trackX + trackW, thumbY + thumbH, 0xFF00D9FF, 0xFF0099CC, 3);
-            ctx.fillGradient(trackX + 1, thumbY + 1, trackX + trackW - 1, thumbY + 4, 0x44FFFFFF, 0x00FFFFFF);
+            fillRounded(ctx, trackX, vpTop, trackX + trackW, vpBot, 0x22FFFFFF, 2);
+            fillRoundedGradient(ctx, trackX, thumbY, trackX + trackW, thumbY + thumbH, applyAlpha(ACCENT, 0.7f), applyAlpha(ACCENT_DARK, 0.7f), 2);
+            fillRounded(ctx, trackX - 1, thumbY - 1, trackX + trackW + 1, thumbY + thumbH + 1, applyAlpha(ACCENT, 0.15f), 3);
         }
 
         ctx.getMatrices().popMatrix();
     }
-    
+
     /**
      * Inverse-transform raw screen-space mouse coordinates into the scaled
      * coordinate space that render() uses. The render method applies:
@@ -751,7 +744,7 @@ public class MahikariClickGui extends Screen {
      */
     private double toScaledX(double screenX) {
         float s = this.lastRenderedScale;
-        if (s <= 0.001f || s >= 0.999f) return screenX; // No transform needed at scale ~1
+        if (s <= 0.001f || s >= 0.999f) return screenX;
         double cx = this.width / 2.0;
         return (screenX - cx) / s + cx;
     }
@@ -765,42 +758,27 @@ public class MahikariClickGui extends Screen {
 
     @Override
     public boolean mouseClicked(Click click, boolean bl) {
-        if (this.currentView == ViewMode.GRID && click.button() == 0) {
+        if (this.currentView == ViewMode.GRID && click.buttonInfo().button() == 0) {
             GridLayout l = this.layout;
             if (l == null) return super.mouseClicked(click, bl);
 
-            // Use the EXACT scroll offset that was used in the last render frame.
-            // Previously this called scrollAnim.get() independently, which could
-            // differ from the value used during render (render calls tick() which
-            // advances the animation; get() called later returns a new value).
             float scrollOffset = this.lastRenderedScroll;
 
-            // Inverse-transform the raw mouse coordinates to account for the
-            // scale transform applied in render(). Without this, when scale < 1
-            // the visual positions of cards are shifted inward but the click
-            // detection used raw screen positions — causing a multi-pixel offset
-            // that made clicks land on the wrong card or wrong button.
             double mx = toScaledX(click.x());
             double my = toScaledY(click.y());
 
-            // NEW: Only check cards if the click is actually inside the visible viewport.
-            // If it's outside (e.g. above/below the panel, or on the scrollbar),
-            // we should let it fall through to super.mouseClicked so the Back button works.
             if (my >= l.viewportTop() && my <= l.viewportBottom() && mx >= l.boxX() && mx <= l.boxX() + l.boxW() - 16) {
                 for (ModuleCard c : cards) {
                     int drawY = c.y - (int)scrollOffset;
 
-                    // Skip cards scrolled out of the viewport.
                     if (drawY + c.height < l.viewportTop() || drawY > l.viewportBottom()) continue;
 
                     if (mx >= c.x && mx <= c.x + c.width && my >= drawY && my <= drawY + c.height) {
 
-                        // Bottom full-width ENABLED/DISABLED (or OPEN) button — must match
-                        // the visual button in ModuleCard.render (btnH=20, btnX=x+8, btnY=drawY+height-btnH-8, btnW=width-16).
                         int btnH = 20;
-                        int btnX = c.x + 8;
-                        int btnY = drawY + c.height - btnH - 8;
-                        int btnW = c.width - 16;
+                        int btnX = c.x + 7;
+                        int btnY = drawY + c.height - btnH - 7;
+                        int btnW = c.width - 14;
                         if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
                             if (c.getState != null && c.toggleState != null) {
                                 c.toggleState.accept(!c.getState.get());
@@ -808,24 +786,21 @@ public class MahikariClickGui extends Screen {
                             } else {
                                 c.onClick.run();
                             }
-                            net.minecraft.client.gui.widget.ButtonWidget.builder(net.minecraft.text.Text.empty(), b -> {}).build().playDownSound(net.minecraft.client.MinecraftClient.getInstance().getSoundManager());
+                            net.minecraft.client.gui.widget.ButtonWidget.builder(net.minecraft.text.Text.literal(""), b -> {}).build().playDownSound(net.minecraft.client.MinecraftClient.getInstance().getSoundManager());
                             return true;
                         }
 
-                        // OPTIONS button top-right — must match ModuleCard.render (optW=48, optH=16, optX=x+width-optW-8, optY=drawY+10).
-                        int optW = 48;
-                        int optH = 16;
-                        int optX = c.x + c.width - optW - 8;
-                        int optY = drawY + 10;
-                        if (mx >= optX && mx <= optX + optW && my >= optY && my <= optY + optH) {
+                        int optS = 18;
+                        int optX = c.x + c.width - optS - 6;
+                        int optY = drawY + 6;
+                        if (mx >= optX && mx <= optX + optS && my >= optY && my <= optY + optS) {
                             c.onClick.run();
-                            net.minecraft.client.gui.widget.ButtonWidget.builder(net.minecraft.text.Text.empty(), b -> {}).build().playDownSound(net.minecraft.client.MinecraftClient.getInstance().getSoundManager());
+                            net.minecraft.client.gui.widget.ButtonWidget.builder(net.minecraft.text.Text.literal(""), b -> {}).build().playDownSound(net.minecraft.client.MinecraftClient.getInstance().getSoundManager());
                             return true;
                         }
 
-                        // Click anywhere else on card → open settings
                         c.onClick.run();
-                        net.minecraft.client.gui.widget.ButtonWidget.builder(net.minecraft.text.Text.empty(), b -> {}).build().playDownSound(net.minecraft.client.MinecraftClient.getInstance().getSoundManager());
+                        net.minecraft.client.gui.widget.ButtonWidget.builder(net.minecraft.text.Text.literal(""), b -> {}).build().playDownSound(net.minecraft.client.MinecraftClient.getInstance().getSoundManager());
                         return true;
                     }
                 }
@@ -833,7 +808,7 @@ public class MahikariClickGui extends Screen {
         }
         return super.mouseClicked(click, bl);
     }
-    
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
         if (maxScroll > 0) {
@@ -843,12 +818,10 @@ public class MahikariClickGui extends Screen {
         }
         return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
     }
-    
+
     @Override
     public void renderBackground(DrawContext ctx, int mx, int my, float delta) {
         super.renderBackground(ctx, mx, my, delta);
-
-        if (TeamViewConfig.get().clickGuiNoBackground) return;
 
         if (this.currentView == ViewMode.GRID) {
             GridLayout l = this.layout;
@@ -861,20 +834,22 @@ public class MahikariClickGui extends Screen {
             boolean isLowQuality = "LOW".equals(TeamViewConfig.get().uiQuality);
             float animProgress = isLowQuality ? 1.0f : Math.max(0f, Math.min(1f, this.openAnim.get()));
 
-            // Modern panel with enhanced depth
-            int bgCol = applyAlpha(0xF5141820, animProgress);
-            int borderCol = applyAlpha(0xFF1E2530, animProgress);
-            int accentCol = applyAlpha(0x4400D9FF, animProgress);
+            int bgCol = applyAlpha(PANEL_BG, animProgress);
+            int borderCol = applyAlpha(PANEL_BORDER, animProgress);
+            int accentCol = applyAlpha(ACCENT_GLOW, animProgress);
 
-            // Shadow layers
+            // Shadow layers with enhanced depth
+            fillRounded(ctx, boxX - 4, boxY + 3, boxX + boxW + 4, boxY + boxH + 3, applyAlpha(0x44000000, animProgress), 14);
             fillRounded(ctx, boxX - 2, boxY + 2, boxX + boxW + 2, boxY + boxH + 2, applyAlpha(0x66000000, animProgress), 12);
-            fillRounded(ctx, boxX - 1, boxY + 1, boxX + boxW + 1, boxY + boxH + 1, applyAlpha(0x44000000, animProgress), 12);
+            fillRounded(ctx, boxX - 1, boxY + 1, boxX + boxW + 1, boxY + boxH + 1, applyAlpha(0x33000000, animProgress), 10);
 
-            // Main panel
+            // Main panel - glassmorphism effect
             fillRounded(ctx, boxX, boxY, boxX + boxW, boxY + boxH, bgCol, 10);
+            ctx.fillGradient(boxX + 2, boxY + 2, boxX + boxW - 2, boxY + 8, applyAlpha(0x15FFFFFF, animProgress), 0x00FFFFFF);
 
-            // Top accent line
-            fillRounded(ctx, boxX + 4, boxY + 4, boxX + boxW - 4, boxY + 6, accentCol, 1);
+            // Top accent line - gradient glow
+            fillRounded(ctx, boxX + 4, boxY + 4, boxX + boxW - 4, boxY + 6, applyAlpha(0x55FFFFFF, animProgress), 1);
+            fillRoundedGradient(ctx, boxX + 4, boxY + 4, boxX + boxW - 4, boxY + 6, applyAlpha(ACCENT, 0.4f), applyAlpha(ACCENT, 0.1f), 1);
 
             // Border
             ctx.fill(boxX, boxY, boxX + boxW, boxY + 1, borderCol);
@@ -882,14 +857,14 @@ public class MahikariClickGui extends Screen {
             ctx.fill(boxX, boxY, boxX + 1, boxY + boxH, borderCol);
             ctx.fill(boxX + boxW - 1, boxY, boxX + boxW, boxY + boxH, borderCol);
 
-            // Title with modern styling
-            ctx.drawCenteredTextWithShadow(this.textRenderer, styled("§l§nMODULES"), this.width / 2, boxY + 16, applyAlpha(0xFF00D9FF, animProgress));
+            // Title
+            ctx.drawCenteredTextWithShadow(this.textRenderer, styled("\u00a7l\u00a7nMODULES"), this.width / 2, boxY + 14, applyAlpha(ACCENT, animProgress));
 
             return;
         }
 
         if (this.currentView == ViewMode.SETTINGS) {
-            int panelW = Math.min(400, this.width - 40);
+            int panelW = Math.min(420, this.width - 40);
             int panelH = this.height - 66;
             int panelX = (this.width - panelW) / 2;
             int panelY = 32;
@@ -897,45 +872,44 @@ public class MahikariClickGui extends Screen {
             boolean isLowQuality = "LOW".equals(TeamViewConfig.get().uiQuality);
             float animProgress = isLowQuality ? 1.0f : Math.max(0f, Math.min(1f, this.openAnim.get()));
 
-            int bgCol = applyAlpha(0xF5141820, animProgress);
-            int borderCol = applyAlpha(0xFF1E2530, animProgress);
-            int accentCol = applyAlpha(0x4400D9FF, animProgress);
+            int bgCol = applyAlpha(PANEL_BG, animProgress);
+            int borderCol = applyAlpha(PANEL_BORDER, animProgress);
+            int accentCol = applyAlpha(ACCENT_GLOW, animProgress);
 
-            // Shadow layers
+            fillRounded(ctx, panelX - 4, panelY + 3, panelX + panelW + 4, panelY + panelH + 3, applyAlpha(0x44000000, animProgress), 14);
             fillRounded(ctx, panelX - 2, panelY + 2, panelX + panelW + 2, panelY + panelH + 2, applyAlpha(0x66000000, animProgress), 12);
-            fillRounded(ctx, panelX - 1, panelY + 1, panelX + panelW + 1, panelY + panelH + 1, applyAlpha(0x44000000, animProgress), 12);
+            fillRounded(ctx, panelX - 1, panelY + 1, panelX + panelW + 1, panelY + panelH + 1, applyAlpha(0x33000000, animProgress), 10);
 
-            // Main panel
             fillRounded(ctx, panelX, panelY, panelX + panelW, panelY + panelH, bgCol, 10);
+            ctx.fillGradient(panelX + 2, panelY + 2, panelX + panelW - 2, panelY + 8, applyAlpha(0x15FFFFFF, animProgress), 0x00FFFFFF);
 
-            // Top accent line
-            fillRounded(ctx, panelX + 4, panelY + 4, panelX + panelW - 4, panelY + 6, accentCol, 1);
+            fillRounded(ctx, panelX + 4, panelY + 4, panelX + panelW - 4, panelY + 6, applyAlpha(0x55FFFFFF, animProgress), 1);
+            fillRoundedGradient(ctx, panelX + 4, panelY + 4, panelX + panelW - 4, panelY + 6, applyAlpha(ACCENT, 0.4f), applyAlpha(ACCENT, 0.1f), 1);
 
-            // Border
             ctx.fill(panelX, panelY, panelX + panelW, panelY + 1, borderCol);
             ctx.fill(panelX, panelY + panelH - 1, panelX + panelW, panelY + panelH, borderCol);
             ctx.fill(panelX, panelY, panelX + 1, panelY + panelH, borderCol);
             ctx.fill(panelX + panelW - 1, panelY, panelX + panelW, panelY + panelH, borderCol);
 
-            String title = activeTab == TAB_HUD ? "Team HUD Settings" :
-                           activeTab == TAB_ARROWS ? "Indicators Settings" :
-                           activeTab == TAB_NOTIFY ? "Notifications Settings" :
-                           activeTab == TAB_EFFECTS ? "Effect HUD Settings" :
-                           activeTab == TAB_SPRINT ? "Auto Sprint Settings" :
-                           activeTab == TAB_CHAT ? "Chat Settings" :
-                           activeTab == TAB_VISUALS ? "Visuals Settings" :
-                           activeTab == TAB_HIDE_ARMOR ? "Hide Armor Settings" :
-                           activeTab == TAB_LOW_FIRE ? "Low Fire Settings" :
-                           activeTab == TAB_LOW_SHIELD ? "Low Shield Settings" :
-                           activeTab == TAB_LOW_TOTEM ? "Low Totem Settings" :
-                           activeTab == TAB_PERFORMANCE ? "Performance Settings" :
-                           activeTab == TAB_SMALL_ITEMS ? "Small Items Settings" : "Tests & Tools";
-            ctx.drawCenteredTextWithShadow(this.textRenderer, styled("§l" + title), panelX + panelW / 2, panelY + 12, applyAlpha(0xFF00D9FF, animProgress));
+            String title = activeTab == TAB_HUD ? "Team HUD" :
+                           activeTab == TAB_ARROWS ? "Indicators" :
+                           activeTab == TAB_NOTIFY ? "Notifications" :
+                           activeTab == TAB_EFFECTS ? "Effect HUD" :
+                           activeTab == TAB_SPRINT ? "Auto Sprint" :
+                           activeTab == TAB_CHAT ? "Chat" :
+                           activeTab == TAB_VISUALS ? "Visuals" :
+                           activeTab == TAB_HIDE_ARMOR ? "Hide Armor" :
+                           activeTab == TAB_LOW_FIRE ? "Low Fire" :
+                           activeTab == TAB_LOW_SHIELD ? "Low Shield" :
+                           activeTab == TAB_LOW_TOTEM ? "Low Totem" :
+                           activeTab == TAB_PERFORMANCE ? "Performance" :
+                             activeTab == TAB_SMALL_ITEMS ? "Small Items" : "Tests & Tools";
+            ctx.drawCenteredTextWithShadow(this.textRenderer, styled("\u00a7l" + title), panelX + panelW / 2, panelY + 12, applyAlpha(ACCENT, animProgress));
 
-            ctx.fill(panelX + 8, panelY + 28, panelX + panelW - 8, panelY + 29, applyAlpha(0x33FFFFFF, animProgress));
+            ctx.fill(panelX + 8, panelY + 28, panelX + panelW - 8, panelY + 29, applyAlpha(0x22FFFFFF, animProgress));
         }
     }
-    
+
     @Override
     public void renderDarkening(DrawContext ctx) {}
 
@@ -951,7 +925,7 @@ public class MahikariClickGui extends Screen {
             ctx.fill(x0 + inset, y1 - 1 - i, x1 - inset, y1 - i, color);
         }
     }
-    
+
     private static void fillRoundedGradient(DrawContext ctx, int x0, int y0, int x1, int y1, int colorStart, int colorEnd, int r) {
         if (r < 1 || x1 - x0 < 2 * r || y1 - y0 < 2 * r) {
             ctx.fillGradient(x0, y0, x1, y1, colorStart, colorEnd);
@@ -972,77 +946,80 @@ public class MahikariClickGui extends Screen {
         ClickableWidget resBtn;
         Supplier<Boolean> visibilityCond;
         int indentLevel = 0;
-        
+        boolean isCategory = false;
+
         Row(int s, String l, ClickableWidget v, ClickableWidget r) {
             this.section = s; this.label = l; this.valBtn = v; this.resBtn = r;
         }
-        
+
         Row indent() {
             this.indentLevel = 12;
-            this.label = "§7↳ §f" + this.label;
+            this.label = "\u00a77\u21aa \u00a7f" + this.label;
             return this;
         }
-        
+
         Row setCondition(Supplier<Boolean> cond) {
             this.visibilityCond = cond;
             return this;
         }
     }
-    
+
     private static class ConfigIntSlider extends SliderWidget {
         private final int min, max;
         private final String fmt;
         private final IntConsumer set;
-        
+
         ConfigIntSlider(int x, int y, int w, int h, int val, int min, int max, String fmt, IntConsumer set) {
-            super(x, y, w, h, Text.empty(), max == min ? 0 : (double)(val - min)/(max - min));
+            super(x, y, w, h, Text.literal(""), max == min ? 0 : (double)(val - min)/(max - min));
             this.min = min; this.max = max; this.fmt = fmt; this.set = set;
             updateMessage();
         }
-        
+
         void setIntValue(int v) {
             this.value = max == min ? 0 : (double)(v - min)/(max - min);
             set.accept(v);
             updateMessage();
         }
-        
+
         @Override protected void updateMessage() {
             setMessage(Text.literal(String.format(fmt, min + (int)(value * (max - min)))));
         }
-        
+
         @Override protected void applyValue() {
             set.accept(min + (int)(value * (max - min)));
             TeamViewConfig.save();
         }
+
     }
-    
+
     private static class ConfigFloatSlider extends SliderWidget {
         private final double min, max;
         private final String fmt;
         private final DoubleConsumer set;
-        
+
         ConfigFloatSlider(int x, int y, int w, int h, double val, double min, double max, String fmt, DoubleConsumer set) {
-            super(x, y, w, h, Text.empty(), max == min ? 0 : (val - min)/(max - min));
+            super(x, y, w, h, Text.literal(""), max == min ? 0 : (val - min)/(max - min));
             this.min = min; this.max = max; this.fmt = fmt; this.set = set;
             updateMessage();
         }
-        
+
         void setDoubleValue(double v) {
             this.value = max == min ? 0 : (v - min)/(max - min);
             set.accept(v);
             updateMessage();
         }
-        
+
         @Override protected void updateMessage() {
             setMessage(Text.literal(String.format(fmt, min + value * (max - min))));
         }
-        
+
         @Override protected void applyValue() {
             set.accept(min + value * (max - min));
             TeamViewConfig.save();
         }
+
     }
-    
+
     private class ModuleCard {
         int x, y, width, height;
         String title, desc;
@@ -1052,7 +1029,8 @@ public class MahikariClickGui extends Screen {
         Supplier<Boolean> getState;
         Consumer<Boolean> toggleState;
         AnimatedFloat hoverAnim = new AnimatedFloat(0f, 0.05f);
-        
+        AnimatedFloat btnAnim = new AnimatedFloat(0f, 0.08f);
+
         public ModuleCard(int x, int y, int w, int h, String title, String desc, net.minecraft.item.ItemStack iconItem, Runnable onClick) {
             this(x, y, w, h, title, desc, iconItem, null, onClick, null, null);
         }
@@ -1071,9 +1049,9 @@ public class MahikariClickGui extends Screen {
             this.getState = getState;
             this.toggleState = toggleState;
         }
-        
+
         private int getIconBgColor() {
-            if (this.iconId != null) return 0xFF5B6EE1; // Modern indigo for custom icons
+            if (this.iconId != null) return 0xFF5B6EE1;
             if (this.iconItem == null) return 0xFF4A5568;
             net.minecraft.item.Item item = this.iconItem.getItem();
             if (item == net.minecraft.item.Items.DIAMOND_HELMET) return 0xFFFF6B9D;
@@ -1091,16 +1069,16 @@ public class MahikariClickGui extends Screen {
             if (item == net.minecraft.item.Items.IRON_SWORD) return 0xFF66BB6A;
             if (item == net.minecraft.item.Items.REDSTONE) return 0xFFEF5350;
             if (item == net.minecraft.item.Items.PAINTING) return 0xFF5B6EE1;
-            return 0xFF4A5568; // Modern gray
+            return 0xFF4A5568;
         }
-        
+
         private int brighten(int color) {
             int r = Math.min(255, ((color >> 16) & 0xFF) + 30);
             int g = Math.min(255, ((color >> 8) & 0xFF) + 30);
             int b = Math.min(255, (color & 0xFF) + 30);
             return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
         }
-        
+
         private int darken(int color) {
             int r = Math.max(0, ((color >> 16) & 0xFF) - 30);
             int g = Math.max(0, ((color >> 8) & 0xFF) - 30);
@@ -1110,89 +1088,51 @@ public class MahikariClickGui extends Screen {
 
         public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
             boolean isLowQuality = "LOW".equals(TeamViewConfig.get().uiQuality);
-
-            // Use the same scroll offset that the main render() stored, so card
-            // positions exactly match the click detection in mouseClicked().
             int drawY = y - (int)lastRenderedScroll;
 
-            // Transform mouse coords to the scaled space for accurate hover detection
             double scaledMX = toScaledX(mouseX);
             double scaledMY = toScaledY(mouseY);
             boolean hovered = scaledMX >= x && scaledMX <= x + width && scaledMY >= drawY && scaledMY <= drawY + height;
 
             this.hoverAnim.setTarget(hovered ? 1f : 0f);
             float hProgress = isLowQuality ? (hovered ? 1f : 0f) : this.hoverAnim.tick();
-
-            // Enhanced modern gradient colors
-            int c1 = 0xFF1A1D2E;
-            int c2 = 0xFF252A3F;
-            int bgColor = isLowQuality ? (hovered ? c2 : c1) : interpolateColor(c1, c2, hProgress);
-            int borderC1 = 0xFF2D3250;
-            int borderC2 = 0xFF00D9FF; // Vibrant cyan accent on hover
-            int borderColor = isLowQuality ? (hovered ? borderC2 : borderC1) : interpolateColor(borderC1, borderC2, hProgress);
-
             float animProgress = isLowQuality ? 1.0f : Math.max(0f, Math.min(1f, MahikariClickGui.this.openAnim.get()));
-            bgColor = applyAlpha(bgColor, animProgress);
-            borderColor = applyAlpha(borderColor, animProgress);
 
-            // Modern card with enhanced shadow
-            int shadowColor1 = applyAlpha(0x88000000, animProgress * 0.6f);
-            int shadowColor2 = applyAlpha(0x44000000, animProgress * 0.4f);
-            fillRounded(ctx, x - 2, drawY + 2, x + width + 2, drawY + height + 2, shadowColor1, isLowQuality ? 3 : 6);
-            fillRounded(ctx, x - 1, drawY + 1, x + width + 1, drawY + height + 1, shadowColor2, isLowQuality ? 3 : 6);
-
-            // Card background with gradient
-            fillRoundedGradient(ctx, x, drawY, x + width, drawY + height, bgColor, darken(bgColor), isLowQuality ? 3 : 6);
-
-            // Glowing border on hover
-            if (hProgress > 0.01f) {
-                int glowAlpha = (int)(hProgress * 100);
-                int glowColor = (glowAlpha << 24) | (borderC2 & 0xFFFFFF);
-                fillRounded(ctx, x - 1, drawY - 1, x + width + 1, drawY + height + 1, glowColor, isLowQuality ? 4 : 7);
-            }
-
-            // Border
-            fillRounded(ctx, x, drawY, x + width, drawY + height, borderColor, isLowQuality ? 3 : 6);
-            fillRounded(ctx, x + 1, drawY + 1, x + width - 1, drawY + height - 1, bgColor, isLowQuality ? 2 : 5);
-
-            // Top highlight for depth
-            int highlightColor = applyAlpha(0x33FFFFFF, animProgress);
-            ctx.fillGradient(x + 2, drawY + 2, x + width - 2, drawY + 8, highlightColor, 0x00FFFFFF);
-
-            // Lunar-style vertical layout:
-            // - Icon top-left in colored square
-            // - "OPTIONS" mini-button top-right
-            // - Title below icon
-            // - Full-width ENABLED/DISABLED button at bottom
-
+            int bgColor = applyAlpha(CARD_BG_START, animProgress);
+            int borderColor = applyAlpha(CARD_BORDER, animProgress);
             boolean isActive = getState != null && getState.get();
+            int cx = x + width / 2;
 
-            // Icon box top-left
-            int boxSize = 26;
-            int boxX = x + 10;
-            int boxY = drawY + 10;
+            // Shadow
+            fillRounded(ctx, x, drawY + 4, x + width, drawY + height + 4, applyAlpha(0x55000000, animProgress), 8);
+            fillRounded(ctx, x - 1, drawY + 3, x + width + 1, drawY + height + 3, applyAlpha(0x33000000, animProgress), 7);
 
-            int baseColor = getIconBgColor();
-            int topColor = isLowQuality ? baseColor : interpolateColor(baseColor, brighten(baseColor), hProgress * 0.3f);
-            int botColor = darken(topColor);
+            // Card background
+            fillRoundedGradient(ctx, x, drawY, x + width, drawY + height, bgColor, applyAlpha(MahikariClickGui.darken(CARD_BG_END, 0.8f), animProgress), 8);
+            fillRounded(ctx, x, drawY, x + width, drawY + height, borderColor, 8);
 
-            if (hProgress > 0.01f) {
-                int iconGlowAlpha = (int)(hProgress * 80);
-                int iconGlow = (iconGlowAlpha << 24) | (baseColor & 0xFFFFFF);
-                fillRoundedGradient(ctx, boxX - 2, boxY - 2, boxX + boxSize + 2, boxY + boxSize + 2, iconGlow, 0x00000000, 8);
-            }
+            // Top highlight
+            ctx.fillGradient(x + 2, drawY + 2, x + width - 2, drawY + 5, applyAlpha(0x18FFFFFF, animProgress), 0x00FFFFFF);
 
-            fillRoundedGradient(ctx, boxX, boxY, boxX + boxSize, boxY + boxSize, applyAlpha(topColor, animProgress), applyAlpha(botColor, animProgress), 6);
-            ctx.fillGradient(boxX + 2, boxY + 2, boxX + boxSize - 2, boxY + 5, applyAlpha(0x44FFFFFF, animProgress), 0x00FFFFFF);
+            // Settings gear
+            int optS = 18;
+            int optX = x + width - optS - 6;
+            int optY = drawY + 6;
+            boolean optHovered = scaledMX >= optX && scaledMX <= optX + optS && scaledMY >= optY && scaledMY <= optY + optS;
+            fillRounded(ctx, optX, optY, optX + optS, optY + optS, applyAlpha(optHovered ? 0xFF3D4860 : 0xFF252A40, animProgress), 4);
+            String gear = "\u2699";
+            ctx.drawTextWithShadow(client.textRenderer, styled(gear), optX + (optS - client.textRenderer.getWidth(gear)) / 2, optY + 3, applyAlpha(optHovered ? ACCENT : TEXT_SECONDARY, animProgress));
 
-            // Render Icon (centered inside the box)
+            // Icon centered at top
+            int boxSize = 22;
+            int boxX = cx - boxSize / 2;
+            int boxY2 = drawY + 10;
+            fillRounded(ctx, boxX + 1, boxY2 + 2, boxX + boxSize + 1, boxY2 + boxSize + 2, applyAlpha(0x88000000, animProgress), 6);
+            fillRoundedGradient(ctx, boxX, boxY2, boxX + boxSize, boxY2 + boxSize, applyAlpha(0xFF2D3250, animProgress), applyAlpha(0xFF1A1F2E, animProgress), 6);
+
             ctx.getMatrices().pushMatrix();
-            float iconScale = isLowQuality ? 0.9f : 0.9f + (0.08f * hProgress);
-            float xOff = (boxSize - 16f * iconScale) / 2f;
-            float yOff = (boxSize - 16f * iconScale) / 2f;
-            ctx.getMatrices().translate(boxX + xOff, boxY + yOff);
-            ctx.getMatrices().scale(iconScale, iconScale);
-
+            float iOff = (boxSize - 16f) / 2f;
+            ctx.getMatrices().translate(boxX + iOff, boxY2 + iOff);
             if (this.iconId != null) {
                 ctx.drawTexture(net.minecraft.client.gl.RenderPipelines.GUI_TEXTURED, this.iconId, 0, 0, 0.0f, 0.0f, 16, 16, 16, 16);
             } else if (this.iconItem != null) {
@@ -1201,139 +1141,92 @@ public class MahikariClickGui extends Screen {
             ctx.getMatrices().popMatrix();
 
             if (client != null) {
-                // OPTIONS mini-button top-right
-                int optW = 48;
-                int optH = 16;
-                int optX = x + width - optW - 8;
-                int optY = drawY + 10;
-                int optBg = applyAlpha(0xFF2A3245, animProgress);
-                int optBgDark = applyAlpha(MahikariClickGui.darken(0xFF2A3245, 0.85f), animProgress);
-                fillRoundedGradient(ctx, optX, optY, optX + optW, optY + optH, optBg, optBgDark, 3);
-                // Subtle border
-                ctx.fill(optX, optY, optX + optW, optY + 1, applyAlpha(0xFF3D4860, animProgress));
-                ctx.fill(optX, optY + optH - 1, optX + optW, optY + optH, applyAlpha(0xFF1A1F2E, animProgress));
-                String optLabel = "OPTIONS";
-                int optLabelW = client.textRenderer.getWidth(optLabel);
-                ctx.drawTextWithShadow(client.textRenderer, styled(optLabel), optX + (optW - optLabelW) / 2, optY + 4, applyAlpha(0xFFFFFFFF, animProgress));
+                // Title centered
+                int titleY = boxY2 + boxSize + 7;
+                String tt = this.title;
+                int tw = client.textRenderer.getWidth(tt);
+                ctx.drawTextWithShadow(client.textRenderer, styled("\u00a7l" + tt), cx - tw / 2, titleY, applyAlpha(TEXT_PRIMARY, animProgress));
 
-                // Title below icon
-                String titleText = this.title;
-                int titleY = boxY + boxSize + 8;
-                ctx.drawTextWithShadow(client.textRenderer, styled("§l" + titleText), x + 10, titleY, applyAlpha(0xFFFFFFFF, animProgress));
-
-                // Description (smaller, below title)
+                // Description centered, smaller
                 ctx.getMatrices().pushMatrix();
-                ctx.getMatrices().translate(x + 10, titleY + 11f);
-                ctx.getMatrices().scale(0.78f, 0.78f);
-                ctx.drawTextWithShadow(client.textRenderer, styled(this.desc), 0, 0, applyAlpha(0xFFB0B8CC, animProgress));
+                ctx.getMatrices().translate(cx, titleY + 11f);
+                ctx.getMatrices().scale(0.75f, 0.75f);
+                int dw = client.textRenderer.getWidth(this.desc);
+                int dc = isActive ? applyAlpha(TEXT_SECONDARY, animProgress) : applyAlpha(TEXT_MUTED, animProgress);
+                ctx.drawTextWithShadow(client.textRenderer, styled(this.desc), -dw / 2, 0, dc);
                 ctx.getMatrices().popMatrix();
 
-                // Bottom full-width ENABLED/DISABLED button
+                // Bottom button
+                int btnH = 20;
+                int btnX2 = x + 7;
+                int btnY2 = drawY + height - btnH - 7;
+                int btnW2 = width - 14;
+                boolean btnHovered = scaledMX >= btnX2 && scaledMX <= btnX2 + btnW2 && scaledMY >= btnY2 && scaledMY <= btnY2 + btnH;
+
+                float btnProgress;
                 if (getState != null) {
-                    int btnH = 20;
-                    int btnX = x + 8;
-                    int btnY = drawY + height - btnH - 8;
-                    int btnW = width - 16;
-
-                    int btnFill;
-                    if (isActive) {
-                        btnFill = 0xFF22C55E; // green
-                    } else {
-                        btnFill = 0xFFDC2626; // red
-                    }
-                    btnFill = applyAlpha(btnFill, animProgress);
-                    fillRounded(ctx, btnX, btnY, btnX + btnW, btnY + btnH, btnFill, 3);
-
-                    String label = isActive ? "ENABLED" : "DISABLED";
-                    int lblW = client.textRenderer.getWidth(label);
-                    ctx.drawTextWithShadow(client.textRenderer, styled("§l" + label), btnX + (btnW - lblW) / 2, btnY + 6, applyAlpha(0xFFFFFFFF, animProgress));
+                    float btnTarget = isActive ? 1f : 0f;
+                    btnAnim.setTarget(btnTarget);
+                    btnProgress = isLowQuality ? btnTarget : btnAnim.tick();
                 } else {
-                    // No toggle (e.g. action-only card like Tests & Tools) — show "OPEN" button instead
-                    int btnH = 20;
-                    int btnX = x + 8;
-                    int btnY = drawY + height - btnH - 8;
-                    int btnW = width - 16;
-
-                    int btnFill = applyAlpha(0xFF3B82F6, animProgress);
-                    fillRounded(ctx, btnX, btnY, btnX + btnW, btnY + btnH, btnFill, 3);
-
-                    String label = "OPEN";
-                    int lblW = client.textRenderer.getWidth(label);
-                    ctx.drawTextWithShadow(client.textRenderer, styled("§l" + label), btnX + (btnW - lblW) / 2, btnY + 6, applyAlpha(0xFFFFFFFF, animProgress));
+                    btnProgress = 0f;
                 }
+
+                int btnC;
+                if (getState != null) {
+                    btnC = interpolateColor(0xFF4A5070, ENVY_GREEN, btnProgress);
+                } else {
+                    btnC = BUTTON_BLUE;
+                }
+                if (btnHovered) btnC = MahikariClickGui.brighten(btnC);
+
+                fillRounded(ctx, btnX2, btnY2, btnX2 + btnW2, btnY2 + btnH, applyAlpha(btnC, animProgress), 4);
+                ctx.fillGradient(btnX2 + 2, btnY2 + 2, btnX2 + btnW2 - 2, btnY2 + 4, applyAlpha(0x40FFFFFF, animProgress), 0x00FFFFFF);
+
+                String lbl;
+                if (getState != null) lbl = isActive ? "\u00a7lON" : "\u00a7lOFF";
+                else lbl = "\u00a7lOPEN";
+                int lw = client.textRenderer.getWidth(lbl);
+                ctx.drawTextWithShadow(client.textRenderer, styled(lbl), btnX2 + (btnW2 - lw) / 2, btnY2 + 5, applyAlpha(TEXT_PRIMARY, animProgress));
             }
         }
     }
-    
+
     private class ConfigToggle extends net.minecraft.client.gui.widget.ClickableWidget {
         private final Supplier<Boolean> getter;
         private final Consumer<Boolean> setter;
-        private float animationProgress;
-        
+        private AnimatedFloat anim = new AnimatedFloat(0f, 0.06f);
+
         ConfigToggle(int x, int y, int w, int h, Supplier<Boolean> get, Consumer<Boolean> set) {
-            super(x, y, w, h, Text.empty());
+            super(x, y, w, h, Text.literal(""));
             this.getter = get;
             this.setter = set;
-            this.animationProgress = get.get() ? 1.0f : 0.0f;
+            this.anim.setTarget(get.get() ? 1f : 0f);
         }
-        
+
         @Override
         public void renderWidget(DrawContext ctx, int mouseX, int mouseY, float delta) {
-            boolean isLowQuality = "LOW".equals(TeamViewConfig.get().uiQuality);
             boolean state = getter.get();
-            float target = state ? 1.0f : 0.0f;
+            anim.setTarget(state ? 1f : 0f);
+            float t = anim.tick();
+            float open = Math.max(0f, Math.min(1f, MahikariClickGui.this.openAnim.get()));
 
-            if (isLowQuality) {
-                animationProgress = target;
-            } else {
-                if (Math.abs(target - animationProgress) > 0.01f) {
-                    animationProgress += (target - animationProgress) * 0.35f;
-                } else {
-                    animationProgress = target;
-                }
-            }
+            int dotColor = interpolateColor(0xFF4A5070, 0xFF22C55E, t);
+            if (isHovered()) dotColor = interpolateColor(dotColor, 0xFFFFFFFF, 0.3f);
+            int dotAlpha = applyAlpha(dotColor, open);
+            ctx.drawTextWithShadow(client.textRenderer, styled("\u25cf"), getX(), getY() + 4, dotAlpha);
 
-            // Compact colors
-            int c1 = 0xFF3A4060;
-            int c2 = 0xFF00D9FF;
-            if (isHovered()) {
-                c1 = 0xFF4A5070;
-                c2 = 0xFF00EEFF;
-            }
-
-            int colorBg = isLowQuality ? (state ? c2 : c1) : interpolateColor(c1, c2, animationProgress);
-            float animProgress = isLowQuality ? 1.0f : Math.max(0f, Math.min(1f, MahikariClickGui.this.openAnim.get()));
-            colorBg = applyAlpha(colorBg, animProgress);
-
-            // Compact toggle background - minimal rounding
-            int bgDark = MahikariClickGui.darken(colorBg, 0.85f);
-            fillRoundedGradient(ctx, getX(), getY(), getX() + getWidth(), getY() + getHeight(), colorBg, bgDark, 2);
-
-            // Inner shadow
-            ctx.fillGradient(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + 2, applyAlpha(0x33000000, animProgress), 0x00000000);
-
-            // Compact animated thumb
-            int thumbW = 12;
-            int maxTravel = getWidth() - thumbW - 4;
-            int thumbX = getX() + 2 + (int)(maxTravel * animationProgress);
-
-            // Thumb shadow
-            fillRounded(ctx, thumbX + 1, getY() + 3, thumbX + thumbW + 1, getY() + getHeight() - 1, applyAlpha(0x44000000, animProgress), 2);
-
-            // Thumb - minimal rounding
-            fillRoundedGradient(ctx, thumbX, getY() + 2, thumbX + thumbW, getY() + getHeight() - 2, applyAlpha(0xFFFFFFFF, animProgress), applyAlpha(0xFFE8E8E8, animProgress), 2);
-
-            // Thumb highlight
-            ctx.fillGradient(thumbX + 1, getY() + 3, thumbX + thumbW - 1, getY() + 4, applyAlpha(0x44FFFFFF, animProgress), 0x00FFFFFF);
-
-            // NO TEXT - just visual toggle
+            String text = state ? "ON" : "OFF";
+            int textColor = interpolateColor(0xFF6B7280, 0xFF22C55E, t);
+            if (isHovered()) textColor = interpolateColor(textColor, 0xFFFFFFFF, 0.3f);
+            ctx.drawTextWithShadow(client.textRenderer, styled("\u00a7l" + text), getX() + 10, getY() + 4, applyAlpha(textColor, open));
         }
-        
+
         @Override
         public boolean mouseClicked(Click click, boolean bl) {
-            double mouseX = click.x();
-            double mouseY = click.y();
-            if (this.active && this.visible && mouseX >= this.getX() && mouseY >= this.getY() && mouseX < this.getX() + this.getWidth() && mouseY < this.getY() + this.getHeight() && click.button() == 0) {
+            double mouseX = toScaledX(click.x());
+            double mouseY = toScaledY(click.y());
+            if (this.active && this.visible && mouseX >= this.getX() && mouseY >= this.getY() && mouseX < this.getX() + this.getWidth() && mouseY < this.getY() + this.getHeight() && click.buttonInfo().button() == 0) {
                 setter.accept(!getter.get());
                 TeamViewConfig.save();
                 this.playDownSound(net.minecraft.client.MinecraftClient.getInstance().getSoundManager());
@@ -1341,7 +1234,7 @@ public class MahikariClickGui extends Screen {
             }
             return super.mouseClicked(click, bl);
         }
-        
+
         @Override
         protected void appendClickableNarrations(net.minecraft.client.gui.screen.narration.NarrationMessageBuilder builder) {
             this.appendDefaultNarrations(builder);
@@ -1367,6 +1260,14 @@ public class MahikariClickGui extends Screen {
         int r = Math.max(0, Math.round(((argb >> 16) & 0xFF) * factor));
         int g = Math.max(0, Math.round(((argb >> 8) & 0xFF) * factor));
         int b = Math.max(0, Math.round((argb & 0xFF) * factor));
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    private static int brighten(int argb) {
+        int a = (argb >> 24) & 0xFF;
+        int r = Math.min(255, ((argb >> 16) & 0xFF) + 30);
+        int g = Math.min(255, ((argb >> 8) & 0xFF) + 30);
+        int b = Math.min(255, (argb & 0xFF) + 30);
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
 }

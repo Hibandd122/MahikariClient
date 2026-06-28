@@ -10,11 +10,10 @@ import dev.mahikari.client.render.ProjectionCapture;
 import dev.mahikari.client.render.TeamHudRenderer;
 import dev.mahikari.client.render.TeamViewRenderer;
 import dev.mahikari.client.render.EffectHudRenderer;
+import dev.mahikari.client.render.NotificationHudRenderer;
+import dev.mahikari.client.notification.ChatListener;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import dev.mahikari.client.notification.ChatListener;
-import dev.mahikari.client.render.NotificationHudRenderer;
-import dev.mahikari.client.render.NametagRenderer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 public class MahikariClient implements ClientModInitializer {
@@ -38,9 +37,6 @@ public class MahikariClient implements ClientModInitializer {
         EffectHudRenderer.register();
         ChatListener.register();
         NotificationHudRenderer.register();
-        NametagRenderer.register();
-        dev.mahikari.client.update.UpdateManager.init();
-
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(ClientCommandManager.literal("testteam").executes(context -> {
                 net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
@@ -49,12 +45,14 @@ public class MahikariClient implements ClientModInitializer {
                     double y = mc.player.getY();
                     double z = mc.player.getZ();
                     String world = mc.world.getRegistryKey().getValue().getPath();
-                    MANAGER.updatePosition("TestPlayer1", world, x + 5, y, z + 5, "king", "");
-                    MANAGER.updatePosition("TestPlayer2", world, x - 5, y, z - 5, "party", "");
-                    MANAGER.updatePosition("TestPlayer3", world, x + 10, y, z, "", "");
+                    MANAGER.updatePosition("TestPlayer1", world, x + 5, y, z + 5, "plains", "king");
+                    MANAGER.updatePosition("TestPlayer2", world, x - 5, y, z - 5, "forest", "vip");
+                    MANAGER.updatePosition("TestPlayer3", world, x + 10, y, z, "desert", "party");
+                    MANAGER.updatePosition("TestPlayer4", world, x - 10, y, z, "taiga", "team");
                     MANAGER.updateHealth("TestPlayer1", 20.0f, 20.0f, 0.0f);
                     MANAGER.updateHealth("TestPlayer2", 10.0f, 20.0f, 0.0f);
                     MANAGER.updateHealth("TestPlayer3", 1.0f, 20.0f, 0.0f);
+                    MANAGER.updateHealth("TestPlayer4", 16.0f, 20.0f, 0.0f);
                     context.getSource().sendFeedback(net.minecraft.text.Text.literal("§aĐã tạo các đồng đội giả để test!"));
                 }
                 return 1;

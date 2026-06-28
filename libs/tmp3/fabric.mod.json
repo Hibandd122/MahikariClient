@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "mahikariui",
+	"version": "1.0.0",
+	"name": "MahikariUI",
+	"description": "Mahikari Animated UI",
+	"authors": [
+		"Mahikari"
+	],
+	"contact": {},
+	"license": "All Rights Reserved",
+	"icon": "assets/mahikariui/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"mahikariui.fabric.MahikariUIFabric"
+		]
+	},
+	"mixins": [
+		{
+			"config": "mahikariui.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.15.0",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

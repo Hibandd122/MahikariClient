@@ -76,16 +76,19 @@ public final class ApolloNetworking {
                     int length = in.readRawVarint32();
                     int oldLimit = in.pushLimit(length);
                     long most = 0, least = 0;
+                    boolean hasMost = false, hasLeast = false;
                     while (!in.isAtEnd()) {
                         int subTag = in.readTag();
                         if (subTag == 0) break;
                         int subField = com.google.protobuf.WireFormat.getTagFieldNumber(subTag);
-                        if (subField == 1) most = in.readInt64();
-                        else if (subField == 2) least = in.readInt64();
+                        if (subField == 1) { most = in.readInt64(); hasMost = true; }
+                        else if (subField == 2) { least = in.readInt64(); hasLeast = true; }
                         else in.skipField(subTag);
                     }
                     in.popLimit(oldLimit);
-                    targetUuid = new UUID(most, least);
+                    if (hasMost && hasLeast) {
+                        targetUuid = new UUID(most, least);
+                    }
                 } else if (fieldNum == 2) { // Color
                     int length = in.readRawVarint32();
                     int oldLimit = in.pushLimit(length);
@@ -127,37 +130,53 @@ public final class ApolloNetworking {
         MinecraftClient mc = MinecraftClient.getInstance();
 
         for (lunarclient.apollo.team.v1.Schema.TeamMember member : msg.getMembersList()) {
-            // Extract location
+            // Extract location — skip if null
+            if (!member.hasLocation()) continue;
             lunarclient.apollo.common.v1.LocationOuterClass.Location loc = member.getLocation();
+            if (loc == null) continue;
             double x = loc.getX();
             double y = loc.getY();
             double z = loc.getZ();
             String world = loc.getWorld();
 
-            // Extract color
-            java.awt.Color color = new java.awt.Color(member.getMarkerColor().getColor());
+            // Extract color — skip if null
+            java.awt.Color color;
+            if (member.hasMarkerColor() && member.getMarkerColor() != null) {
+                color = new java.awt.Color(member.getMarkerColor().getColor());
+            } else {
+                color = java.awt.Color.GREEN;
+            }
 
             // Extract name from adventure JSON format
             String adventureJson = member.getAdventureJsonPlayerName();
             String name = extractName(adventureJson);
 
-            // Extract UUID and check if it's self
+            // Extract UUID and check if it's self — skip if null
+            if (!member.hasPlayerUuid()) continue;
             lunarclient.apollo.common.v1.UuidOuterClass.Uuid apolloUuid = member.getPlayerUuid();
+            if (apolloUuid == null) continue;
             UUID mcUuid = toMinecraftUuid(apolloUuid);
 
             if (mc.player != null && mcUuid.equals(mc.player.getUuid())) {
-                // Skip self - but store world for cross-world detection
                 continue;
             }
 
-            // Feed into TeamViewManager
-            // Apollo data doesn't have biome/role, so we pass empty strings
-            manager.updatePosition(name, world, x, y, z, "", "apollo");
-            TeamViewManager.TeammateData td = manager.findByName(name);
-            if (td != null) {
-                td.updateApolloData(mcUuid, color);
+            name = resolvePlayerName(mc, mcUuid, name);
+            manager.updateApolloPosition(name, mcUuid, color, world, x, y, z);
+        }
+    }
+
+    private static String resolvePlayerName(MinecraftClient mc, UUID uuid, String fallback) {
+        if (mc != null && mc.getNetworkHandler() != null && uuid != null) {
+            net.minecraft.client.network.PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(uuid);
+            if (entry != null && entry.getProfile() != null && entry.getProfile().name() != null) {
+                String profileName = TeamViewManager.cleanDisplayName(entry.getProfile().name());
+                if (!profileName.isEmpty()) {
+                    return profileName;
+                }
             }
         }
+        return TeamViewManager.cleanDisplayName(fallback);
     }
 
     private static void handleReset() {
@@ -182,18 +201,40 @@ public final class ApolloNetworking {
         try {
             JsonElement element = JsonParser.parseString(adventureJson);
             if (element.isJsonPrimitive()) {
-                return element.getAsString();
+                return TeamViewManager.cleanDisplayName(element.getAsString());
             }
             if (element.isJsonObject()) {
-                JsonObject obj = element.getAsJsonObject();
-                if (obj.has("text")) {
-                    return obj.get("text").getAsString();
-                }
+                StringBuilder out = new StringBuilder();
+                appendPlainText(element, out);
+                String parsed = TeamViewManager.cleanDisplayName(out.toString());
+                if (!parsed.isEmpty()) return parsed;
             }
         } catch (Exception e) {
             // Fall through to raw return
         }
         // Fallback: return as-is, stripping quotes
-        return adventureJson.replace("\"", "");
+        return TeamViewManager.cleanDisplayName(adventureJson);
+    }
+
+    private static void appendPlainText(JsonElement element, StringBuilder out) {
+        if (element == null || element.isJsonNull()) return;
+        if (element.isJsonPrimitive()) {
+            out.append(element.getAsString());
+            return;
+        }
+        if (element.isJsonArray()) {
+            for (JsonElement child : element.getAsJsonArray()) {
+                appendPlainText(child, out);
+            }
+            return;
+        }
+        if (!element.isJsonObject()) return;
+        JsonObject obj = element.getAsJsonObject();
+        if (obj.has("text")) {
+            appendPlainText(obj.get("text"), out);
+        }
+        if (obj.has("extra")) {
+            appendPlainText(obj.get("extra"), out);
+        }
     }
 }

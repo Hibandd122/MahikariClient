@@ -21,11 +21,13 @@ public class TeamViewManager {
     }
 
     public void addTeammate(String name) {
-        this.teammates.putIfAbsent(name.toLowerCase(Locale.ROOT), new TeammateData(name));
+        String cleanName = cleanDisplayName(name);
+        if (cleanName.isEmpty()) return;
+        this.teammates.putIfAbsent(getNameKey(cleanName), new TeammateData(cleanName));
     }
 
     public void removeTeammate(String name) {
-        this.teammates.remove(name.toLowerCase(Locale.ROOT));
+        this.teammates.remove(getNameKey(name));
     }
 
     public void clearAll() {
@@ -33,11 +35,11 @@ public class TeamViewManager {
     }
 
     public boolean isTeammate(String name) {
-        return this.teammates.containsKey(name.toLowerCase(Locale.ROOT));
+        return this.teammates.containsKey(getNameKey(name));
     }
 
     public TeammateData findByName(String name) {
-        return this.teammates.get(name.toLowerCase(Locale.ROOT));
+        return this.teammates.get(getNameKey(name));
     }
 
     public TeammateData findByUuid(java.util.UUID uuid) {
@@ -55,46 +57,122 @@ public class TeamViewManager {
     }
 
     public void updatePosition(String name, String world, double x, double y, double z, String biome, String role) {
-        TeammateData data = this.teammates.get(name.toLowerCase(Locale.ROOT));
+        String cleanName = cleanDisplayName(name);
+        if (cleanName.isEmpty()) return;
+        String key = getNameKey(cleanName);
+        TeammateData data = this.teammates.get(key);
         if (data != null) {
             data.updateFromServer(world, x, y, z, biome, role);
         } else {
-            TeammateData auto = new TeammateData(name);
+            TeammateData auto = new TeammateData(cleanName);
             auto.updateFromServer(world, x, y, z, biome, role);
-            this.teammates.put(name.toLowerCase(Locale.ROOT), auto);
+            this.teammates.put(key, auto);
         }
     }
 
+    public void updateApolloPosition(String name, UUID uuid, java.awt.Color color, String world, double x, double y, double z) {
+        String cleanName = cleanDisplayName(name);
+        if (cleanName.isEmpty()) return;
+
+        TeammateData data = uuid != null ? findByUuid(uuid) : null;
+        String key = getNameKey(data != null ? data.getName() : cleanName);
+        if (data == null) {
+            data = this.teammates.get(key);
+        }
+        if (data == null) {
+            data = new TeammateData(cleanName);
+            key = getNameKey(cleanName);
+            this.teammates.put(key, data);
+        }
+        data.updateFromServer(world, x, y, z, "", "apollo");
+        data.updateApolloData(uuid, color);
+    }
+
     public void setRole(String name, String role) {
-        TeammateData data = this.teammates.get(name.toLowerCase(Locale.ROOT));
+        TeammateData data = this.teammates.get(getNameKey(name));
         if (data != null) {
             data.role = role != null ? role : "";
         }
     }
 
     public void setOffline(String name) {
-        TeammateData data = this.teammates.get(name.toLowerCase(Locale.ROOT));
+        TeammateData data = this.teammates.get(getNameKey(name));
         if (data != null) {
             data.markOffline();
         }
     }
 
     public void updateHealth(String name, float cur, float max, float absorption) {
-        TeammateData data = this.teammates.get(name.toLowerCase(Locale.ROOT));
+        String cleanName = cleanDisplayName(name);
+        if (cleanName.isEmpty()) return;
+        String key = getNameKey(cleanName);
+        TeammateData data = this.teammates.get(key);
         if (data == null) {
-            data = new TeammateData(name);
-            this.teammates.put(name.toLowerCase(Locale.ROOT), data);
+            data = new TeammateData(cleanName);
+            this.teammates.put(key, data);
         }
         data.updateHealth(cur, max, absorption);
     }
 
     public void updateRemoteEffects(String name, List<RemoteEffect> effects) {
-        TeammateData data = this.teammates.get(name.toLowerCase(Locale.ROOT));
+        String cleanName = cleanDisplayName(name);
+        if (cleanName.isEmpty()) return;
+        String key = getNameKey(cleanName);
+        TeammateData data = this.teammates.get(key);
         if (data == null) {
-            data = new TeammateData(name);
-            this.teammates.put(name.toLowerCase(Locale.ROOT), data);
+            data = new TeammateData(cleanName);
+            this.teammates.put(key, data);
         }
         data.updateRemoteEffects(effects);
+    }
+
+    public static String getNameKey(String name) {
+        String cleanName = cleanDisplayName(name);
+        String identityName = extractUsernameToken(cleanName);
+        StringBuilder key = new StringBuilder(identityName.length());
+        for (int i = 0; i < identityName.length(); i++) {
+            char c = identityName.charAt(i);
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+                key.append(Character.toLowerCase(c));
+            }
+        }
+        return key.toString();
+    }
+
+    public static String cleanDisplayName(String name) {
+        if (name == null) return "";
+        String trimmed = name.replace("\"", "").trim();
+        StringBuilder out = new StringBuilder(trimmed.length());
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            if (c == '\u00a7' && i + 1 < trimmed.length()) {
+                i++;
+                continue;
+            }
+            if (!Character.isISOControl(c)) {
+                out.append(c);
+            }
+        }
+        return out.toString().trim();
+    }
+
+    private static String extractUsernameToken(String cleanName) {
+        String best = "";
+        int start = -1;
+        for (int i = 0; i <= cleanName.length(); i++) {
+            char c = i < cleanName.length() ? cleanName.charAt(i) : ' ';
+            boolean usernameChar = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+            if (usernameChar) {
+                if (start < 0) start = i;
+            } else if (start >= 0) {
+                String token = cleanName.substring(start, i);
+                if (token.length() >= 3 && token.length() <= 16) {
+                    best = token;
+                }
+                start = -1;
+            }
+        }
+        return best.isEmpty() ? cleanName : best;
     }
 
     public static class TeammateData {
@@ -184,32 +262,42 @@ public class TeamViewManager {
          * - currentHealth/absorption: use whichever source updated most recently
          */
         private void resolveHealth() {
+            // Snapshot all volatile fields to local variables for consistent resolution
+            long srvMs = this.lastServerHealthMs;
+            long locMs = this.lastLocalHealthMs;
+            float srvHp = this.serverHealth;
+            float srvMax = this.serverMaxHealth;
+            float srvAbs = this.serverAbsorption;
+            float locHp = this.localHealth;
+            float locMax = this.localMaxHealth;
+            float locAbs = this.localAbsorption;
+
             float oldHealth = this.health;
-            boolean hasServer = this.lastServerHealthMs > 0L;
-            boolean hasLocal = this.lastLocalHealthMs > 0L;
+            boolean hasServer = srvMs > 0L;
+            boolean hasLocal = locMs > 0L;
 
             // maxHealth: server is authoritative, local is fallback
-            if (hasServer && this.serverMaxHealth > 0.0f) {
-                this.maxHealth = this.serverMaxHealth;
+            if (hasServer && srvMax > 0.0f) {
+                this.maxHealth = srvMax;
             } else if (hasLocal) {
-                this.maxHealth = this.localMaxHealth;
+                this.maxHealth = locMax;
             }
 
             // currentHealth + absorption: prefer the most recent source
             if (hasServer && hasLocal) {
-                if (this.lastLocalHealthMs >= this.lastServerHealthMs) {
-                    this.health = this.localHealth;
-                    this.absorption = this.localAbsorption;
+                if (locMs >= srvMs) {
+                    this.health = locHp;
+                    this.absorption = locAbs;
                 } else {
-                    this.health = this.serverHealth;
-                    this.absorption = this.serverAbsorption;
+                    this.health = srvHp;
+                    this.absorption = srvAbs;
                 }
             } else if (hasServer) {
-                this.health = this.serverHealth;
-                this.absorption = this.serverAbsorption;
+                this.health = srvHp;
+                this.absorption = srvAbs;
             } else if (hasLocal) {
-                this.health = this.localHealth;
-                this.absorption = this.localAbsorption;
+                this.health = locHp;
+                this.absorption = locAbs;
             }
             
             if (oldHealth - this.health > 0.2f) {
@@ -329,8 +417,16 @@ public class TeamViewManager {
         }
 
         public void updateApolloData(UUID uuid, java.awt.Color color) {
-            this.uuid = uuid;
+            if (uuid != null) {
+                this.uuid = uuid;
+            }
             this.apolloColor = color;
+        }
+
+        public void updateUuid(UUID uuid) {
+            if (uuid != null) {
+                this.uuid = uuid;
+            }
         }
 
         public void updateApolloColor(java.awt.Color color) {
@@ -433,7 +529,8 @@ public class TeamViewManager {
         }
 
         public String getRole() {
-            if ("apollo".equals(this.role) && this.apolloColor != null) {
+            String normalizedRole = normalizeRole(this.role);
+            if ("apollo".equals(normalizedRole) && this.apolloColor != null) {
                 int r = this.apolloColor.getRed();
                 int g = this.apolloColor.getGreen();
                 int b = this.apolloColor.getBlue();
@@ -448,7 +545,19 @@ public class TeamViewManager {
                 // Vàng/Cam (King): Red và Green đều cao, Blue thấp
                 if (r > b && g > b) return "king";
             }
-            return this.role;
+            return normalizedRole;
+        }
+
+        private static String normalizeRole(String role) {
+            if (role == null) return "";
+            return switch (role.trim().toLowerCase(Locale.ROOT)) {
+                case "vip", "premium", "donator", "donor", "rank_vip" -> "vip";
+                case "king", "leader", "owner" -> "king";
+                case "party", "ally", "friend" -> "party";
+                case "team", "member", "teammate" -> "team";
+                case "apollo" -> "apollo";
+                default -> role.trim().toLowerCase(Locale.ROOT);
+            };
         }
 
         public double getServerX() {

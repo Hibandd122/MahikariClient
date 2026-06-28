@@ -3,6 +3,8 @@ package dev.mahikari.client.mixin;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import dev.mahikari.client.TeamViewConfig;
 import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.effect.StatusEffects;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -32,10 +34,20 @@ public class LightmapTextureManagerMixin {
     )
     private float newgenMahikari$injectFullbrightMarker(float original) {
         TeamViewConfig cfg = TeamViewConfig.get();
-        if (cfg.visualsEnabled && cfg.fullBright) {
-            float level = Math.max(0.0f, Math.min(1.0f, cfg.fullBrightLevel));
-            return 100.0f + level;
+        if (!cfg.visualsEnabled || !cfg.fullBright) {
+            return original;
         }
-        return original;
+        
+        MinecraftClient client = MinecraftClient.getInstance();
+        // Return original if client or player is null, or if player has blindness/darkness
+        if (client == null || client.player == null || 
+            client.player.hasStatusEffect(StatusEffects.BLINDNESS) || 
+            client.player.hasStatusEffect(StatusEffects.DARKNESS)) {
+            return original;
+        }
+        
+        // Clamp fullBrightLevel to valid range [0.0, 1.0]
+        float level = Math.max(0.0f, Math.min(1.0f, cfg.fullBrightLevel));
+        return 100.0f + level;
     }
 }

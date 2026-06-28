@@ -1,0 +1,17 @@
+{
+	"required": true,
+	"package": "mahikariui.mixin.common.client",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"MinecraftCloseMixin",
+		"ScreenMixin",
+		"TitleScreenMixin",
+		"SplashOverlayMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

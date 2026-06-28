@@ -20,7 +20,7 @@ public class EffectHudRenderer {
     public static void register() {
         HudRenderCallback.EVENT.register((ctx, tickDeltaManager) -> {
             MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc.player == null) return;
+            if (mc.player == null || mc.world == null) return;
             if (mc.currentScreen instanceof dev.mahikari.client.screen.HudEditorScreen) return;
             TeamViewConfig cfg = TeamViewConfig.get();
             if (!cfg.effectHudEnabled) return;

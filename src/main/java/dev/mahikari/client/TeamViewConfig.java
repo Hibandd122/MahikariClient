@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import net.fabricmc.loader.api.FabricLoader;
 
 public class TeamViewConfig {
-    private static TeamViewConfig INSTANCE;
+    private static volatile TeamViewConfig INSTANCE;
     private static final Gson GSON;
     private static final Path PATH;
 
@@ -30,6 +30,7 @@ public class TeamViewConfig {
     public int teamHudOffsetY = 8;
     public float teamHudScale = 1.0f;
     public int teamHudMaxCards = 3;
+    public boolean teamHudShowBackground = true;
     public boolean teamHudShowHpText = true;
     public boolean teamHudShowEffects = true;
     public boolean teamHudDeathAnim = true;
@@ -65,7 +66,6 @@ public class TeamViewConfig {
     
     public boolean notificationShowBackground = true;
     public boolean notificationShowBorder = true;
-    public boolean notificationShowProgress = true;
     public boolean notificationShowIconBox = true;
     public boolean notificationShowShimmer = true;
 
@@ -75,6 +75,36 @@ public class TeamViewConfig {
 
     public boolean noFog = true;
     public float noFogDensity = 0.0f;
+    
+    /**
+     * Validates and clamps configuration values to ensure they are within valid ranges.
+     * This method should be called after loading configuration to prevent invalid values.
+     */
+    public void validateAndClamp() {
+        this.fullBrightLevel = clampFinite(this.fullBrightLevel, 0.0f, 1.0f, 1.0f);
+        this.noFogDensity = clampFinite(this.noFogDensity, 0.0f, 1.0f, 0.0f);
+        this.nearRange = clampFinite(this.nearRange, 0.0f, Float.MAX_VALUE, 0.0f);
+        this.scaleMultiplier = clampFinite(this.scaleMultiplier, 0.1f, Float.MAX_VALUE, 1.0f);
+        this.offScreenScale = clampFinite(this.offScreenScale, 0.1f, 2.0f, 0.5f);
+        this.teamHudScale = clampFinite(this.teamHudScale, 0.1f, 5.0f, 1.0f);
+        this.effectHudScale = clampFinite(this.effectHudScale, 0.1f, 5.0f, 1.0f);
+        this.notificationScale = clampFinite(this.notificationScale, 0.1f, 5.0f, 1.0f);
+        this.notificationDurationMul = clampFinite(this.notificationDurationMul, 0.1f, 10.0f, 1.0f);
+        this.itemScale = clampFinite(this.itemScale, 0.1f, 5.0f, 1.0f);
+        this.totemScale = clampFinite(this.totemScale, 0.1f, 5.0f, 1.0f);
+        this.fireHeight = clampFinite(this.fireHeight, -2.0f, 2.0f, 0.0f);
+        this.shieldHeight = clampFinite(this.shieldHeight, -2.0f, 2.0f, 0.0f);
+        this.totemHeight = clampFinite(this.totemHeight, -2.0f, 2.0f, 0.0f);
+        this.itemOffsetX = clampFinite(this.itemOffsetX, -5.0f, 5.0f, 0.0f);
+        this.itemOffsetY = clampFinite(this.itemOffsetY, -5.0f, 5.0f, 0.0f);
+        this.smoothChatSpeed = clampFinite(this.smoothChatSpeed, 0.1f, 10.0f, 1.0f);
+        this.sprintingScale = clampFinite(this.sprintingScale, 0.1f, 5.0f, 1.0f);
+    }
+
+    private static float clampFinite(float value, float min, float max, float fallback) {
+        if (!Float.isFinite(value)) return fallback;
+        return Math.max(min, Math.min(max, value));
+    }
     public boolean clearFluids = true;
     public boolean autoSprint = false;
     public boolean sprintingAnimated = true;
@@ -83,15 +113,6 @@ public class TeamViewConfig {
     public float smoothChatSpeed = 1.0f;
     public boolean effectHudShowAmplifier = true;
     public String effectHudSortMode = "DURATION";
-
-    // Nametag Tweaks
-    public boolean nametagEnabled = true;
-    public boolean nametagNoBackground = false;
-    public String nametagBackgroundColor = "BLACK"; // BLACK, WHITE, RED, GREEN, BLUE, TRANSPARENT
-    public float nametagScale = 1.0f;
-    public boolean nametagShowTeammates = false; // by default teammates show via TeamView hologram
-    public boolean nametagShowSelf = false; // show own nametag in third person
-    public float nametagMaxDistance = 128.0f;
 
     // Visual Tweaks
     public boolean lowFire = false;
@@ -129,6 +150,8 @@ public class TeamViewConfig {
         if (INSTANCE == null) {
             INSTANCE = new TeamViewConfig();
         }
+        // Validate and clamp configuration values after loading
+        INSTANCE.validateAndClamp();
     }
 
     public static void save() {
@@ -191,17 +214,7 @@ public class TeamViewConfig {
         };
     }
 
-    public int getNametagBackgroundColorARGB() {
-        return switch (this.nametagBackgroundColor.toUpperCase()) {
-            case "BLACK" -> 0xA0000000;
-            case "WHITE" -> 0xA0FFFFFF;
-            case "RED" -> 0xA0AA0000;
-            case "GREEN" -> 0xA000AA00;
-            case "BLUE" -> 0xA00000AA;
-            case "TRANSPARENT" -> 0x00000000;
-            default -> 0xA0000000; // Default black, visibly opaque
-        };
-    }
+
 
     static {
         GSON = new GsonBuilder().setPrettyPrinting().create();

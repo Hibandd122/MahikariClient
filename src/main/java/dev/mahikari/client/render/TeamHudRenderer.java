@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -110,8 +111,12 @@ public final class TeamHudRenderer {
             return;
         }
         ArrayList<TeamViewManager.TeammateData> visible = new ArrayList<>();
+        HashSet<String> seen = new HashSet<>();
         for (TeamViewManager.TeammateData d2 : MahikariClient.MANAGER.getAll()) {
             if (!matchesFilter(filter, d2.getRole())) continue;
+            AbstractClientPlayerEntity entity = playerCache.get(TeamViewManager.getNameKey(d2.getName()));
+            String identityKey = identityKey(d2, entity);
+            if (identityKey.isEmpty() || !seen.add(identityKey)) continue;
             visible.add(d2);
         }
         if (visible.isEmpty()) {
@@ -164,7 +169,7 @@ public final class TeamHudRenderer {
     private static boolean matchesFilter(Filter filter, String role) {
         if (filter == Filter.ALL) return true;
         if (filter == Filter.DISABLED) return false;
-        if (filter == Filter.PARTY_ONLY) return "party".equals(role) || "king".equals(role) || "apollo".equals(role);
+        if (filter == Filter.PARTY_ONLY) return "party".equals(role) || "king".equals(role) || "vip".equals(role) || "apollo".equals(role);
         if (filter == Filter.TEAM_ONLY) return "team".equals(role) || "apollo".equals(role) || role == null || role.isEmpty();
         return true;
     }
@@ -217,10 +222,21 @@ public final class TeamHudRenderer {
         ctx.drawText(mc.textRenderer, msg, x + padX, y + 3, 0xFFB7C0CC, true);
     }
 
-    private static void drawCardPanel(DrawContext ctx, int x0, int y0, int x1, int y1, int radius, RoleStyle style, boolean dead, boolean lowHp) {
+    private static void drawCardPanel(DrawContext ctx, int x0, int y0, int x1, int y1, int radius, RoleStyle style, boolean dead, boolean lowHp, boolean showBackground) {
         int border = lowHp ? 0xCCFF3333 : dead ? 0x88444444 : style.borderHighlight;
         int bgTop = dead ? 0xEE0D0D0D : style.bgTop;
         int bgBottom = dead ? 0xEE050505 : style.bgBottom;
+
+        if (!showBackground) {
+            int accent = dead ? 0xAA444444 : style.accentTop;
+            if (!dead && lowHp) {
+                int pulseAlpha = (int)(120 + 80 * Math.sin(System.currentTimeMillis() / 150.0));
+                accent = (Math.max(40, pulseAlpha) << 24) | 0xFF3333;
+            }
+            fillRoundedLeft(ctx, x0, y0, x0 + ACCENT_W, y1, accent, radius);
+            ctx.fillGradient(x0, y0 + 1, x0 + ACCENT_W, y1 - 1, accent, dead ? 0xAA444444 : style.accentBottom);
+            return;
+        }
 
         // Enhanced Multi-layer Glowing Drop Shadow
         int shadowColor1 = lowHp ? 0x66FF0000 : 0x66000000;
@@ -264,8 +280,18 @@ public final class TeamHudRenderer {
         ctx.fill(x0 + ACCENT_W, y0 + 1, x0 + ACCENT_W + 1, y1 - 1, 0x22000000);
     }
 
-    private static void drawHeadFrame(DrawContext ctx, int x, int y, int size, RoleStyle style, boolean dead, boolean lowHp) {
+    private static void drawHeadFrame(DrawContext ctx, int x, int y, int size, RoleStyle style, boolean dead, boolean lowHp, boolean showBackground) {
         int border = lowHp ? 0xFFFF3333 : dead ? 0xFF666666 : style.accentTop;
+
+        if (!showBackground) {
+            // Minimal clean border — single thin colored outline, no dark plate or glow
+            int thinBorder = (border & 0x00FFFFFF) | 0xCC000000;
+            ctx.fill(x - 1, y - 1, x + size + 1, y, thinBorder);
+            ctx.fill(x - 1, y + size, x + size + 1, y + size + 1, thinBorder);
+            ctx.fill(x - 1, y, x, y + size, thinBorder);
+            ctx.fill(x + size, y, x + size + 1, y + size, thinBorder);
+            return;
+        }
 
         // Multi-layer outer glow for depth
         int glow1 = (border & 0x00FFFFFF) | 0x44000000;
@@ -288,12 +314,13 @@ public final class TeamHudRenderer {
 
     private static int rolePriority(String role) {
         if ("king".equals(role)) return 0;
-        if ("party".equals(role) || "apollo".equals(role)) return 1;
-        return 2;
+        if ("vip".equals(role)) return 1;
+        if ("party".equals(role) || "apollo".equals(role)) return 2;
+        return 3;
     }
 
     private static boolean hasEffects(TeamViewManager.TeammateData data) {
-        AbstractClientPlayerEntity entity = playerCache.get(data.getName().toLowerCase(java.util.Locale.ROOT));
+        AbstractClientPlayerEntity entity = playerCache.get(TeamViewManager.getNameKey(data.getName()));
         if (entity != null) {
             return !entity.getStatusEffects().isEmpty();
         }
@@ -305,7 +332,6 @@ public final class TeamHudRenderer {
     }
 
     public static int drawCard(DrawContext ctx, MinecraftClient mc, TeamViewConfig cfg, TeamViewManager.TeammateData data, int yBase) {
-        String role = data.getRole();
         RoleStyle style = getRoleStyle(data);
 
         int headX = ACCENT_W + 4;
@@ -321,8 +347,7 @@ public final class TeamHudRenderer {
         float maxHp = data.getMaxHealth();
         boolean dead = !data.isOnline() || realHp <= 0.0f;
         
-        boolean isHoplite = "king".equals(role) || "party".equals(role) || "team".equals(role) || "apollo".equals(role);
-        boolean hasValidHealth = !isHoplite && (data.getLastServerHealthMs() > 0 || data.getLastLocalHealthMs() > 0);
+        boolean hasValidHealth = data.getLastServerHealthMs() > 0 || data.getLastLocalHealthMs() > 0;
         
         if (!dead) {
             data.smoothHealthToward(realHp, absHp);
@@ -355,22 +380,23 @@ public final class TeamHudRenderer {
         long lastDmg = data.getLastDamageTimeMs();
         long now = System.currentTimeMillis();
         boolean takingDamage = hasValidHealth && (!dead && now - lastDmg < 400L);
+        boolean showBackground = cfg.teamHudShowBackground;
 
-        drawCardPanel(ctx, panelX0, panelY0, panelX1, panelY1, R, style, dead, lowHp);
+        drawCardPanel(ctx, panelX0, panelY0, panelX1, panelY1, R, style, dead, lowHp, showBackground);
 
-        if (takingDamage) {
-            float flashAlpha = (1.0f - ((now - lastDmg) / 400.0f)) * 0.35f;
+        if (showBackground && takingDamage) {
+            float flashAlpha = Math.max(0.0f, Math.min(1.0f, (1.0f - ((now - lastDmg) / 400.0f)) * 0.35f));
             int flashOverlay = ((int)(flashAlpha * 255)) << 24 | 0xFF0000;
             fillRounded(ctx, panelX0, panelY0, panelX1, panelY1, flashOverlay, R);
         }
 
         // Head
-        drawHeadFrame(ctx, headX, yBase, HEAD_SIZE, style, dead, lowHp);
+        drawHeadFrame(ctx, headX, yBase, HEAD_SIZE, style, dead, lowHp, showBackground);
         drawHead(ctx, mc, data, headX, yBase, HEAD_SIZE);
         if (dead) {
             ctx.fill(headX, yBase, headX + HEAD_SIZE, yBase + HEAD_SIZE, 0x88000000);
         } else if (takingDamage) {
-            float flashAlpha = 1.0f - ((now - lastDmg) / 400.0f);
+            float flashAlpha = Math.max(0.0f, Math.min(1.0f, 1.0f - ((now - lastDmg) / 400.0f)));
             int flashOverlay = ((int)(flashAlpha * 180)) << 24 | 0xFF3333;
             ctx.fill(headX, yBase, headX + HEAD_SIZE, yBase + HEAD_SIZE, flashOverlay);
         } else if (lowHp) {
@@ -415,7 +441,7 @@ public final class TeamHudRenderer {
 
         // Health bar
         if (hasValidHealth) {
-            drawHpBar(ctx, contentX, barY, BAR_W, BAR_H, displayHp, trailHp, displayAbs, trailAbs, maxHp, !dead, style);
+            drawHpBar(ctx, contentX, barY, BAR_W, BAR_H, displayHp, trailHp, displayAbs, trailAbs, maxHp, !dead, style, showBackground);
         }
 
         // Effects row
@@ -433,6 +459,7 @@ public final class TeamHudRenderer {
     private static RoleStyle getRoleStyle(TeamViewManager.TeammateData data) {
         String role = data.getRole();
         if ("king".equals(role)) return STYLE_KING;
+        if ("vip".equals(role)) return STYLE_VIP;
         if ("party".equals(role)) return STYLE_PARTY;
         if ("team".equals(role)) return STYLE_TEAM;
 
@@ -466,6 +493,14 @@ public final class TeamHudRenderer {
         0xFF66FFFF                        // name color (brighter)
     );
 
+    // VIP: Magenta / rose premium theme
+    private static final RoleStyle STYLE_VIP = new RoleStyle(
+        0xEE260D1F, 0xEE140712,
+        0xFFFF4FD8, 0xFFD81B8C,
+        0xCCFF5CDC, 0x44550A3F,
+        0xFFFF9BEE
+    );
+
     // Team: Vibrant green / emerald - Enhanced
     private static final RoleStyle STYLE_TEAM = new RoleStyle(
         0xEE141C16, 0xEE0A0F0B,           // bg top/bottom (premium dark emerald)
@@ -481,13 +516,18 @@ public final class TeamHudRenderer {
         int nameColor
     ) {}
 
-    private static void drawHpBar(DrawContext ctx, int x, int y, int w, int h, float displayHp, float trailHp, float displayAbs, float trailAbs, float maxHp, boolean alive, RoleStyle style) {
-        // Enhanced Multi-layer Drop shadow for health bar
-        fillRounded(ctx, x - 2, y - 2, x + w + 2, y + h + 2, 0x44000000, 3);
-        fillRounded(ctx, x - 1, y - 1, x + w + 1, y + h + 1, 0x55000000, 2);
+    private static void drawHpBar(DrawContext ctx, int x, int y, int w, int h, float displayHp, float trailHp, float displayAbs, float trailAbs, float maxHp, boolean alive, RoleStyle style, boolean showBackground) {
+        if (showBackground) {
+            // Enhanced Multi-layer Drop shadow for health bar
+            fillRounded(ctx, x - 2, y - 2, x + w + 2, y + h + 2, 0x44000000, 3);
+            fillRounded(ctx, x - 1, y - 1, x + w + 1, y + h + 1, 0x55000000, 2);
 
-        // Rounded inner track with gradient
-        fillRoundedGradient(ctx, x, y, x + w, y + h, 0xEE08080C, 0xEE050508, 2);
+            // Rounded inner track with gradient
+            fillRoundedGradient(ctx, x, y, x + w, y + h, 0xEE08080C, 0xEE050508, 2);
+        } else {
+            // Minimal track for no-background mode — just a subtle semi-transparent base
+            fillRounded(ctx, x, y, x + w, y + h, 0x88000000, 2);
+        }
 
         if (!alive) {
             ctx.fill(x + 1, y + 1, x + w - 1, y + h - 1, 0x66FF2222);
@@ -627,7 +667,7 @@ public final class TeamHudRenderer {
     private static double computeDistanceTo(MinecraftClient mc, TeamViewManager.TeammateData data) {
         double tx, ty, tz;
         if (mc.player == null) return -1.0;
-        AbstractClientPlayerEntity entity = playerCache.get(data.getName().toLowerCase(java.util.Locale.ROOT));
+        AbstractClientPlayerEntity entity = playerCache.get(TeamViewManager.getNameKey(data.getName()));
         if (entity != null) {
             tx = entity.getX(); ty = entity.getY(); tz = entity.getZ();
         } else if (data.hasRecentServerData()) {
@@ -677,7 +717,7 @@ public final class TeamHudRenderer {
     }
 
     private static boolean drawEffectsRow(DrawContext ctx, MinecraftClient mc, int x, int y, TeamViewManager.TeammateData data) {
-        AbstractClientPlayerEntity entity = playerCache.get(data.getName().toLowerCase(java.util.Locale.ROOT));
+        AbstractClientPlayerEntity entity = playerCache.get(TeamViewManager.getNameKey(data.getName()));
         if (entity != null) {
             Collection<StatusEffectInstance> live = entity.getStatusEffects();
             if (live.isEmpty()) return false;
@@ -725,12 +765,24 @@ public final class TeamHudRenderer {
         if (mc.world == null) return;
         for (AbstractClientPlayerEntity p : mc.world.getPlayers()) {
             if (p == mc.player) continue;
-            playerCache.put(p.getName().getString().toLowerCase(java.util.Locale.ROOT), p);
+            playerCache.put(TeamViewManager.getNameKey(p.getName().getString()), p);
             TeamViewManager.TeammateData td = MahikariClient.MANAGER.findByName(p.getName().getString());
             if (td != null) {
+                td.updateUuid(p.getUuid());
                 td.updateLocalHealth(p.getHealth(), p.getMaxHealth(), p.getAbsorptionAmount());
             }
         }
+    }
+
+    private static String identityKey(TeamViewManager.TeammateData data, AbstractClientPlayerEntity entity) {
+        if (entity != null && entity.getUuid() != null) {
+            return "uuid:" + entity.getUuid();
+        }
+        if (data.getUuid() != null) {
+            return "uuid:" + data.getUuid();
+        }
+        String nameKey = TeamViewManager.getNameKey(data.getName());
+        return nameKey.isEmpty() ? "" : "name:" + nameKey;
     }
 
     private enum Filter { ALL, PARTY_ONLY, TEAM_ONLY, DISABLED }

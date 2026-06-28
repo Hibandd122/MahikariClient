@@ -57,7 +57,7 @@ public class HudEditorScreen extends Screen {
             mgr.updatePosition("Preview1", "", 0.0, 64.0, 0.0, "plains", "king");
             mgr.updateHealth("Preview1", 18.0f, 20.0f, 4.0f);
             mgr.addTeammate("Preview2");
-            mgr.updatePosition("Preview2", "", 0.0, 64.0, 0.0, "plains", "party");
+            mgr.updatePosition("Preview2", "", 0.0, 64.0, 0.0, "plains", "vip");
             mgr.updateHealth("Preview2", 12.0f, 20.0f, 0.0f);
             mgr.addTeammate("Preview3");
             mgr.updatePosition("Preview3", "", 0.0, 64.0, 0.0, "forest", "team");
@@ -68,8 +68,6 @@ public class HudEditorScreen extends Screen {
         TeamViewConfig cfg = TeamViewConfig.get();
         int nw = totalNotifyW();
         int nh = totalNotifyH();
-        cfg.notificationOffsetX = Math.max(0, Math.min(this.width - nw, cfg.notificationOffsetX));
-        cfg.notificationOffsetY = Math.max(0, Math.min(this.height - nh, cfg.notificationOffsetY));
 
         this.teamHudElement = new DraggableElement("Team HUD") {
             @Override int getX() { return cfg.teamHudOffsetX; }
@@ -197,7 +195,7 @@ public class HudEditorScreen extends Screen {
     public boolean mouseClicked(Click click, boolean bl) {
         double mouseX = click.x();
         double mouseY = click.y();
-        int button = click.button();
+        int button = click.buttonInfo().button();
 
         int totalWidth = 0;
         int gap = 30;
@@ -269,7 +267,7 @@ public class HudEditorScreen extends Screen {
     public boolean mouseDragged(Click click, double deltaX, double deltaY) {
         double mouseX = click.x();
         double mouseY = click.y();
-        int button = click.button();
+        int button = click.buttonInfo().button();
 
         java.util.List<DraggableElement> others = java.util.Arrays.asList(teamHudElement, notificationElement, sprintingElement, effectHudElement);
 
@@ -295,7 +293,7 @@ public class HudEditorScreen extends Screen {
     public boolean mouseReleased(Click click) {
         double mouseX = click.x();
         double mouseY = click.y();
-        int button = click.button();
+        int button = click.buttonInfo().button();
 
         if (button == 0) {
             boolean wasDragging = teamHudElement.dragging || notificationElement.dragging || sprintingElement.dragging || effectHudElement.dragging;

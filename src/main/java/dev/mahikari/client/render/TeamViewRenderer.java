@@ -6,6 +6,7 @@ import dev.mahikari.client.TeamViewManager;
 import dev.mahikari.client.render.ProjectionCapture;
 import dev.mahikari.client.util.WorldFormat;
 import java.util.HashMap;
+import java.util.HashSet;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.client.MinecraftClient;
@@ -28,6 +29,7 @@ public final class TeamViewRenderer {
     private static final int C_PARTY_ARROW = -583833857;
     private static final int C_PARTY_SHADOW = -2146360747;
     private static final int C_PARTY_TEXT = -11171585;
+    private static final String ICON_VIP = "VIP";
     private static final int TRANSLUCENT_ALPHA = 176;
     private static final int VERY_TRANSLUCENT_ALPHA = 85;
     private static final HashMap<String, AbstractClientPlayerEntity> playerCache = new HashMap<>();
@@ -66,6 +68,7 @@ public final class TeamViewRenderer {
         double camZ = ProjectionCapture.getCamZ();
         TeamViewRenderer.refreshPlayerCache(mc);
         String mode = cfg.viewMode;
+        HashSet<String> rendered = new HashSet<>();
 
         for (TeamViewManager.TeammateData data : MahikariClient.MANAGER.getAll()) {
             String rIcon;
@@ -81,10 +84,13 @@ public final class TeamViewRenderer {
             boolean isPartyOrKing;
             if (!data.isOnline()) continue;
             String role = data.getRole();
-            isPartyOrKing = "party".equals(role) || "king".equals(role) || "apollo".equals(role);
+            isPartyOrKing = "party".equals(role) || "king".equals(role) || "vip".equals(role) || "apollo".equals(role);
             if ("PARTY_ONLY".equals(mode) && !isPartyOrKing && !role.isEmpty()) continue;
-            AbstractClientPlayerEntity entity = playerCache.get(data.getName().toLowerCase(java.util.Locale.ROOT));
+            AbstractClientPlayerEntity entity = playerCache.get(TeamViewManager.getNameKey(data.getName()));
+            String identityKey = identityKey(data, entity);
+            if (identityKey.isEmpty() || !rendered.add(identityKey)) continue;
             if (entity != null) {
+                data.updateUuid(entity.getUuid());
                 Vec3d pos = entity.getLerpedPos(tickDelta);
                 tx = pos.x;
                 ty = pos.y + (double)entity.getHeight() + (double)0.7f;
@@ -99,10 +105,13 @@ public final class TeamViewRenderer {
                 data.snapDisplay(tx, ty, tz);
             } else {
                 if (!data.hasRecentServerData()) continue;
-                data.smoothToward(data.getServerX(), data.getServerY() + 1.6, data.getServerZ());
-                tx = data.getDisplayX();
-                ty = data.getDisplayY();
-                tz = data.getDisplayZ();
+                // Use server position directly. Exponential smoothing toward a stale server
+                // pos makes the name visibly lag behind the moving player and, on fast camera
+                // turns, leaves a ghost name briefly visible at the old screen edge.
+                tx = data.getServerX();
+                ty = data.getServerY() + 1.6;
+                tz = data.getServerZ();
+                data.snapDisplay(tx, ty, tz);
                 tWorld = data.getWorld();
                 biome = data.getBiome();
                 double d0 = tx - camX;
@@ -122,6 +131,10 @@ public final class TeamViewRenderer {
                 rA = -583833857;
                 rS = -2146360747;
                 rT = -11171585;
+            } else if ("vip".equals(role)) {
+                rA = 0xDDFF4FD8;
+                rS = 0x802B061E;
+                rT = 0xFFFF9BEE;
             } else if ("team".equals(role)) {
                 rA = cA;
                 rS = cS;
@@ -148,6 +161,10 @@ public final class TeamViewRenderer {
                     rIcon = ICON_PARTY;
                     break;
                 }
+                case "vip": {
+                    rIcon = ICON_VIP;
+                    break;
+                }
                 default: {
                     rIcon = ICON_TEAM;
                 }
@@ -159,7 +176,7 @@ public final class TeamViewRenderer {
                 float sc = distScale * cfg.scaleMultiplier * ProjectionCapture.getZoomScale() * 1.5f;
                 int displayRT = occluded ? TeamViewRenderer.veryTranslucent(rT) : TeamViewRenderer.translucent(rT);
                 int n = displayGray = occluded ? TeamViewRenderer.veryTranslucent(-5592406) : TeamViewRenderer.translucent(-5592406);
-                if (entityLoaded && playerDist <= (double)cfg.nearRange && sameWorld) {
+                if (entityLoaded && sameWorld) {
                     TeamViewRenderer.drawNearIcon(ctx, mc, proj[0], proj[1], sc, displayRT, rIcon, role);
                     continue;
                 }
@@ -169,7 +186,11 @@ public final class TeamViewRenderer {
                 continue;
             }
             if (onScreen || !cfg.offScreenEnabled || !cfg.offScreenNear && entityLoaded && playerDist <= (double)cfg.nearRange && sameWorld || "ALL_PARTY_OFFSCREEN".equals(mode) && !isPartyOrKing) continue;
-            double angle = Math.atan2(-proj[3], proj[2]);
+            // For players behind the camera (vz < 0), negate both vy and vx to correct screen-edge angle
+            float eoVx = proj[2];
+            float eoVy = proj[3];
+            if (proj[4] < 0) { eoVx = -eoVx; eoVy = -eoVy; }
+            double angle = Math.atan2(-eoVy, eoVx);
             String biomeTag = sameWorld ? (icon.isEmpty() ? "" : "§f" + icon) : "§c" + WorldFormat.formatWorld(tWorld);
             String distStr = String.valueOf((int) Math.round(playerDist));
             TeamViewRenderer.drawEdgeArrow(ctx, mc, angle, sw, sh, padT, padS, padB, oss, data.getName(), distStr, biomeTag, TeamViewRenderer.translucent(rA), TeamViewRenderer.translucent(rS), TeamViewRenderer.translucent(rT));
@@ -255,6 +276,7 @@ public final class TeamViewRenderer {
     private static int roleAccentTop(String role) {
         return switch (role == null ? "" : role) {
             case "king" -> 0xCCE8A825;
+            case "vip" -> 0xCCFF4FD8;
             case "party" -> 0xCC22AAEE;
             default -> 0x8844AA55;
         };
@@ -263,6 +285,7 @@ public final class TeamViewRenderer {
     private static int roleAccentBottom(String role) {
         return switch (role == null ? "" : role) {
             case "king" -> 0xCCCC8800;
+            case "vip" -> 0xCCD81B8C;
             case "party" -> 0xCC1177CC;
             default -> 0x88227733;
         };
@@ -271,6 +294,7 @@ public final class TeamViewRenderer {
     private static int roleAccentBg(String role) {
         return switch (role == null ? "" : role) {
             case "king" -> 0x880F0A04;
+            case "vip" -> 0x88140712;
             case "party" -> 0x88040A0F;
             default -> 0x88080808;
         };
@@ -279,6 +303,7 @@ public final class TeamViewRenderer {
     private static int roleBorderHighlight(String role) {
         return switch (role == null ? "" : role) {
             case "king" -> 0x33FFCC44;
+            case "vip" -> 0x33FF5CDC;
             case "party" -> 0x3344CCFF;
             default -> 0x18FFFFFF;
         };
@@ -309,8 +334,19 @@ public final class TeamViewRenderer {
         playerCache.clear();
         for (AbstractClientPlayerEntity p : mc.world.getPlayers()) {
             if (p == mc.player) continue;
-            playerCache.put(p.getName().getString().toLowerCase(java.util.Locale.ROOT), p);
+            playerCache.put(TeamViewManager.getNameKey(p.getName().getString()), p);
         }
+    }
+
+    private static String identityKey(TeamViewManager.TeammateData data, AbstractClientPlayerEntity entity) {
+        if (entity != null && entity.getUuid() != null) {
+            return "uuid:" + entity.getUuid();
+        }
+        if (data.getUuid() != null) {
+            return "uuid:" + data.getUuid();
+        }
+        String nameKey = TeamViewManager.getNameKey(data.getName());
+        return nameKey.isEmpty() ? "" : "name:" + nameKey;
     }
 
     private static void drawEdgeArrow(DrawContext ctx, MinecraftClient mc, double angle, int sw, int sh, float padT, float padS, float padB, float oss, String name, String distStr, String biomeTag, int cA, int cS, int cT) {

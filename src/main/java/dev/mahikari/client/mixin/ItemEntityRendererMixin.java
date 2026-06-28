@@ -8,6 +8,8 @@ import net.minecraft.client.render.entity.state.ItemEntityRenderState;
 import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.RotationAxis;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -24,23 +26,20 @@ public class ItemEntityRendererMixin {
         TeamViewConfig cfg = TeamViewConfig.get();
         if (!cfg.itemPhysicsEnabled) return;
 
-        // Discard the vanilla MatrixStack modifications (bobbing and Y-rotation)
-        matrices.pop();
-        
-        // Start a fresh transformation based on the entity's actual position
-        matrices.push();
+        // Reset the current matrix entry in-place to discard vanilla bobbing/rotation
+        // This avoids pop/push which can corrupt the stack if other mixins alter depth
+        Matrix4f pos = matrices.peek().getPositionMatrix();
+        Matrix3f norm = matrices.peek().getNormalMatrix();
+        pos.identity();
+        norm.identity();
 
         if ("2D".equals(cfg.itemPhysicsMode)) {
-            // Lunar Client style: 2D flat item facing the camera
             matrices.translate(0, 0.2f, 0);
             matrices.multiply(MinecraftClient.getInstance().getEntityRenderDispatcher().camera.getRotation());
-            matrices.scale(1.0f, 1.0f, 0.001f); // Flatten the 3D model into 2D
+            matrices.scale(1.0f, 1.0f, 0.001f);
         } else {
-            // Default ItemPhysics style: Item lays flat on the ground
             matrices.translate(0, 0.05f, 0);
             matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(90f));
-            
-            // Random rotation on the ground based on the item's seed
             float rotation = state.seed * 360f;
             matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(rotation));
         }

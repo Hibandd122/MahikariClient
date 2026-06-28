@@ -1,6 +1,7 @@
 plugins {
     id 'fabric-loom' version '1.16.2'
     id 'maven-publish'
+    id 'com.gradleup.shadow' version '9.0.0-beta4'
 }
 
 version = project.mod_version
@@ -26,28 +27,22 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     
-    // Compile against UIMahikari
-    modImplementation files('D:/ModJava/UIMahikari/build/libs/modid-1.0.0.jar')
+    
     modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 
     // Protobuf + Apollo (for Hoplite/Apollo protocol support)
-    implementation 'com.google.protobuf:protobuf-java:4.31.1'
-    include 'com.google.protobuf:protobuf-java:4.31.1'
-    implementation files('libs/apollo-api-1.2.1.jar')
-    implementation files('libs/apollo-proto-classes.jar')
+    shadow 'com.google.protobuf:protobuf-java:4.31.1'
+    shadow files('libs/apollo-api-1.2.1.jar')
+    shadow files('libs/apollo-proto-classes.jar')
+    compileOnly 'com.google.protobuf:protobuf-java:4.31.1'
+    compileOnly files('libs/apollo-api-1.2.1.jar')
+    compileOnly files('libs/apollo-proto-classes.jar')
 
     // JCodec — pure-Java MP4 decoder for UIMahikari video backgrounds.
-    implementation 'org.jcodec:jcodec:0.2.5'
-    implementation 'org.jcodec:jcodec-javase:0.2.5'
-}
-
-// Resolve the JCodec jars from the runtime classpath so we can bundle them via zipTree.
-configurations {
-    jcodec
-}
-dependencies {
-    jcodec 'org.jcodec:jcodec:0.2.5'
-    jcodec 'org.jcodec:jcodec-javase:0.2.5'
+    shadow 'org.jcodec:jcodec:0.2.5'
+    shadow 'org.jcodec:jcodec-javase:0.2.5'
+    compileOnly 'org.jcodec:jcodec:0.2.5'
+    compileOnly 'org.jcodec:jcodec-javase:0.2.5'
 }
 
 processResources {
@@ -69,34 +64,19 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
-jar {
+shadowJar {
+    configurations = [project.configurations.shadow]
+    relocate 'com.google.protobuf', 'dev.mahikari.shaded.com.google.protobuf'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
+}
 
-    // Embed Apollo proto classes and Apollo API directly into the jar
-    from(zipTree('libs/apollo-proto-classes.jar')) {
-        exclude 'META-INF/**'
-    }
-    from(zipTree('libs/apollo-api-1.2.1.jar')) {
-        exclude 'META-INF/**'
-    }
-
-    // Embed UIMahikari classes and assets directly into the jar (Fat Jar)
-    from(zipTree('D:/ModJava/UIMahikari/build/libs/modid-1.0.0.jar')) {
-        exclude 'META-INF/MANIFEST.MF'
-        exclude 'fabric.mod.json' // We will merge this manually into the client's fabric.mod.json
-    }
-
-    // Embed JCodec (pure-Java MP4 decoder) for UIMahikari video backgrounds.
-    from(configurations.jcodec.collect { zipTree(it) }) {
-        exclude 'META-INF/MANIFEST.MF'
-        exclude 'META-INF/*.SF'
-        exclude 'META-INF/*.DSA'
-        exclude 'META-INF/*.RSA'
-    }
+remapJar {
+    dependsOn shadowJar
+    input = shadowJar.archiveFile
 }
 
 publishing {

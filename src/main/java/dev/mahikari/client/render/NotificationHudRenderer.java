@@ -10,12 +10,12 @@ import org.joml.Matrix3x2fStack;
 import java.util.List;
 
 public class NotificationHudRenderer {
-    private static final int CARD_PAD_X = 16;
-    private static final int CARD_PAD_Y = 12;
-    private static final int CARD_GAP = 12;
-    private static final int PROGRESS_BAR_H = 3;
+    private static final int CARD_PAD_X = 12;
+    private static final int CARD_PAD_Y = 8;
+    private static final int CARD_GAP = 8;
     private static final int ACCENT_STRIP_W = 4;
-    private static final float SUBTITLE_SCALE = 0.88f;
+    private static final int ICON_BOX_SIZE = 20;
+    private static final float SUBTITLE_SCALE = 0.85f;
 
     public static void register() {
         HudRenderCallback.EVENT.register((ctx, tickCounter) -> {
@@ -91,16 +91,12 @@ public class NotificationHudRenderer {
 
     public static int[] measureCard(MinecraftClient mc, String title, String subtitle) {
         String icon = iconForTitle(title);
-        int iconW = icon.isEmpty() ? 0 : 20 + 8; // 20px box + 8px gap
+        int iconW = icon.isEmpty() ? 0 : ICON_BOX_SIZE + 6;
         int titleW = mc.textRenderer.getWidth(styled(title));
         int subW = (int)(mc.textRenderer.getWidth(styled(subtitle)) * SUBTITLE_SCALE);
         int textW = Math.max(titleW, subW);
-        int boxW = 16 + iconW + textW + 16; // 16px left pad, 16px right pad
-        TeamViewConfig cfg = TeamViewConfig.get();
-        int boxH = 9 + 4 + (int)(9 * SUBTITLE_SCALE) + CARD_PAD_Y * 2;
-        if (cfg.notificationShowProgress) {
-            boxH += PROGRESS_BAR_H + 4;
-        }
+        int boxW = CARD_PAD_X + iconW + textW + CARD_PAD_X;
+        int boxH = 9 + 3 + (int)(9 * SUBTITLE_SCALE) + CARD_PAD_Y * 2;
         return new int[] { boxW, boxH };
     }
 
@@ -108,7 +104,7 @@ public class NotificationHudRenderer {
                                 int color, float progress, int x, int y, int w, int h, int alphaInt) {
         TeamViewConfig cfg = TeamViewConfig.get();
         int titleColor = (alphaInt << 24) | 0xFFFFFF;
-        int subtitleColor = ((alphaInt * 200 / 255) << 24) | 0xC0C8D8;
+        int subtitleColor = (alphaInt << 24) | 0xE8ECF4;
         int bgAlpha = alphaInt * 220 / 255;
 
         // Modern Dark Glassmorphism with enhanced depth
@@ -154,22 +150,18 @@ public class NotificationHudRenderer {
         fillRounded(ctx, x + 3, y + pillPad - 2, x + 11, y + h - pillPad + 2, (gAlpha2 << 24) | (color & 0xFFFFFF), 3);
 
         // Main accent pill with gradient
-        int accentTop = accentColor;
         int accentBot = ((alphaInt * 180 / 255) << 24) | darken(color, 0.7f);
-        fillRoundedGradient(ctx, x + 6, y + pillPad, x + 6 + pillW, y + h - pillPad, accentTop, accentBot, 2);
+        fillRoundedGradient(ctx, x + 6, y + pillPad, x + 6 + pillW, y + h - pillPad, accentColor, accentBot, 2);
 
         // Pill highlight
-        ctx.fillGradient(x + 7, y + pillPad + 1, x + 6 + pillW - 1, y + pillPad + 3, ((alphaInt * 60 / 255) << 24) | 0xFFFFFF, 0x00FFFFFF);
+        ctx.fillGradient(x + 7, y + pillPad + 1, x + 6 + pillW - 1, y + pillPad + 3, ((alphaInt * 50 / 255) << 24) | 0xFFFFFF, 0x00FFFFFF);
 
-        int textX = x + 18;
+        int textX = x + CARD_PAD_X;
         String icon = iconForTitle(title);
 
         if (!icon.isEmpty()) {
-            int boxSize = 24;
-            int boxY = y + (h - PROGRESS_BAR_H - 4 - boxSize) / 2;
-            if (!cfg.notificationShowProgress) {
-                boxY = y + (h - boxSize) / 2;
-            }
+            int boxSize = ICON_BOX_SIZE;
+            int boxY = y + (h - boxSize) / 2;
 
             if (cfg.notificationShowIconBox) {
                 // Modern icon box with glow
@@ -178,23 +170,22 @@ public class NotificationHudRenderer {
                 int iconGlow = ((alphaInt * 60 / 255) << 24) | (color & 0xFFFFFF);
 
                 // Glow
-                fillRounded(ctx, textX - 2, boxY - 2, textX + boxSize + 2, boxY + boxSize + 2, iconGlow, 6);
+                fillRounded(ctx, textX - 2, boxY - 2, textX + boxSize + 2, boxY + boxSize + 2, iconGlow, 5);
 
                 // Box
-                fillRounded(ctx, textX, boxY, textX + boxSize, boxY + boxSize, iconBorder, 5);
-                fillRounded(ctx, textX + 1, boxY + 1, textX + boxSize - 1, boxY + boxSize - 1, iconBg, 4);
+                fillRounded(ctx, textX, boxY, textX + boxSize, boxY + boxSize, iconBorder, 4);
+                fillRounded(ctx, textX + 1, boxY + 1, textX + boxSize - 1, boxY + boxSize - 1, iconBg, 3);
 
                 // Highlight
                 ctx.fillGradient(textX + 2, boxY + 2, textX + boxSize - 2, boxY + 5, ((alphaInt * 40 / 255) << 24) | 0xFFFFFF, 0x00FFFFFF);
             }
 
-            ctx.drawText(mc.textRenderer, icon, textX + (boxSize - mc.textRenderer.getWidth(icon)) / 2 + 1, boxY + 8, titleColor, true);
+            ctx.drawText(mc.textRenderer, icon, textX + (boxSize - mc.textRenderer.getWidth(icon)) / 2 + 1, boxY + 6, titleColor, true);
 
-            textX += boxSize + 10;
+            textX += boxSize + 6;
         }
 
         int textY = y + CARD_PAD_Y;
-        if (!cfg.notificationShowProgress) textY += 2;
 
         // Title with subtle glow
         ctx.drawText(mc.textRenderer, styled(title), textX + 1, textY + 1, ((alphaInt * 30 / 255) << 24) | (color & 0xFFFFFF), false);
@@ -202,43 +193,10 @@ public class NotificationHudRenderer {
 
         Matrix3x2fStack m = ctx.getMatrices();
         m.pushMatrix();
-        m.translate(textX, textY + 14);
+        m.translate(textX, textY + 11);
         m.scale(SUBTITLE_SCALE, SUBTITLE_SCALE);
-        ctx.drawText(mc.textRenderer, styled(subtitle), 0, 0, subtitleColor, false);
+        ctx.drawText(mc.textRenderer, styled(subtitle), 0, 0, subtitleColor, true);
         m.popMatrix();
-
-        if (cfg.notificationShowProgress) {
-            // Modern Floating Progress Bar with glow
-            int barY = y + h - PROGRESS_BAR_H - 6;
-            int barX = x + 18;
-            int barW = w - 36;
-            int fillW = (int) (barW * progress);
-
-            // Track with inner shadow
-            int trackBg = ((alphaInt * 50 / 255) << 24) | 0x2D3250;
-            fillRounded(ctx, barX, barY, barX + barW, barY + PROGRESS_BAR_H, trackBg, 2);
-            ctx.fillGradient(barX + 1, barY, barX + barW - 1, barY + 1, ((alphaInt * 30 / 255) << 24) | 0x000000, 0x00000000);
-
-            if (fillW > 0) {
-                // Progress glow
-                int barGlow = ((alphaInt * 80 / 255) << 24) | (color & 0xFFFFFF);
-                fillRounded(ctx, barX - 1, barY - 1, barX + fillW + 1, barY + PROGRESS_BAR_H + 1, barGlow, 3);
-
-                // Progress fill with gradient
-                int barFill1 = ((alphaInt * 255 / 255) << 24) | color;
-                int barFill2 = ((alphaInt * 200 / 255) << 24) | brighten(color, 1.4f);
-
-                fillRoundedGradient(ctx, barX, barY, barX + fillW, barY + PROGRESS_BAR_H, barFill1, barFill2, 2);
-
-                // Progress highlight
-                ctx.fillGradient(barX + 1, barY, barX + fillW - 1, barY + 1, ((alphaInt * 80 / 255) << 24) | 0xFFFFFF, 0x00FFFFFF);
-
-                // Leading edge glow
-                if (fillW > 4 && fillW < barW - 2) {
-                    ctx.fill(barX + fillW - 3, barY, barX + fillW, barY + PROGRESS_BAR_H, ((alphaInt * 200 / 255) << 24) | 0xFFFFFF);
-                }
-            }
-        }
 
         // Enhanced Sweeping Shimmer effect
         if (cfg.notificationShowShimmer && progress > 0.7f) {

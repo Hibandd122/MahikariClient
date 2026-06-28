@@ -10,20 +10,22 @@ public class ChatListener {
     private static final String AIRDROP_NOTIF_TITLE = "THÍNH RƠI";
     private static final String AIRDROP_FALLEN_NOTIF_TITLE = "THÍNH ĐÃ RƠI";
 
-    // Vd: FLX_MasterG đã chế tạo Fangcaller! Không ai có thể...
+    // Vd: 󰀈 󰍧Khanhthanh19030 đã chế tạo Goldreaper! Không ai có thể...
+    // Server prefixes with icon (󰀈) + team icon (󰍧/󰍰/󰍣/󰍩/󰍥) before player name
     private static final Pattern LEGENDARY_CRAFT_PATTERN = Pattern
-            .compile("(\\S+).*đã chế tạo(.*?)(?:!|huyền thoại)");
+            .compile("(?:\\S+\\s+)?\\S(\\w+)\\s+đã chế tạo\\s+(.+?)(?:!|huyền thoại)");
 
     // Vd: Đã có tín hiệu thính rơi... tọa độ x110, y83, z-39
     private static final Pattern AIRDROP_PATTERN = Pattern
-            .compile("thính rơi.*?[xX](-?\\d+).*?[yY](-?\\d+).*?[zZ](-?\\d+)");
+            .compile("(?i)thính rơi.*?[xX](-?\\d+).*?[yY](-?\\d+).*?[zZ](-?\\d+)");
 
     // Vd: Thính đã bắt đầu rơi!
     private static final Pattern AIRDROP_FALLEN_PATTERN = Pattern
             .compile("(?i)thính đã bắt đầu rơi");
 
-    // Vd: Đủ chế tạo Cactus Chestplate hoặc to craft a Smelter's Pickaxe
-    private static final Pattern CRAFTABLE_PATTERN = Pattern.compile("(?i)^(?!.*nhấn vào đây|.*click here).*(?:đủ chế tạo |to craft an? )(.*)$");
+    // Vd: Bạn có đủ nguyên liệu để chế tạo Lumberjack's Axe
+    // Also matches: "to craft a Smelter's Pickaxe" (English Hoplite)
+    private static final Pattern CRAFTABLE_PATTERN = Pattern.compile("(?i)^(?!.*nhấn vào đây|.*click here).*(?:đủ nguyên liệu để chế tạo |to craft an? )(.*)$");
 
     // English Hoplite Patterns
     private static final Pattern HOPLITE_CRAFT_PATTERN = Pattern.compile("(?i)(You|\\S+) (?:have|has) crafted (?:the )?(.*?)!");
